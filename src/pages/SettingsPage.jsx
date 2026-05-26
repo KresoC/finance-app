@@ -10,6 +10,19 @@ function CategoryList({ type }) {
   const [newGroup, setNewGroup] = useState('Redovni');
   const [newMonthMode, setNewMonthMode] = useState('all');
 
+  function toggleFlexible(catId) {
+    const newState = {
+      ...state,
+      categories: {
+        ...state.categories,
+        [type]: state.categories[type].map(c =>
+          c.id === catId ? { ...c, flexible: !c.flexible } : c
+        )
+      }
+    };
+    updateState(newState);
+  }
+
   function toggleCatMonth(catId, month) {
     const cat = [...state.categories.income, ...state.categories.expense].find(c => c.id === catId);
     if (!cat) return;
@@ -136,6 +149,15 @@ function CategoryList({ type }) {
                     >{mn}</span>
                   ))}
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!c.flexible}
+                    onChange={() => toggleFlexible(c.id)}
+                  />
+                  <span>Fleksibilni timing</span>
+                  <span className="muted" style={{ fontSize: '0.75rem' }}>— forecast koristi godišnji iznos, ne po mjesecu</span>
+                </label>
               </div>
             </li>
           );

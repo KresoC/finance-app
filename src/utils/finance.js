@@ -169,10 +169,57 @@ export function effectiveExpenseMonth(state, m) {
 export function projectionYearEnd(state) {
   const sm = startMonthIdx(state);
   const fromM = startIsThisYear(state) ? sm : 0;
+  const cm = currentMonthIdx(state);
   let sum = state.initialBalance;
+
+  // Korak 1: standardna monthly effective logika za sve kategorije
   for (let m = fromM; m < 12; m++) {
     sum += effectiveIncomeMonth(state, m) - effectiveExpenseMonth(state, m);
   }
+
+  // Korak 2: ukloni doprinos fleksibilnih kategorija iz monthly zbroja
+  for (let m = fromM; m < 12; m++) {
+    // Ukloni fleksibilne prihode (što je effectiveIncomeMonth ubrojio)
+    state.categories.income.forEach(c => {
+      if (!c.flexible) return;
+      let a;
+      if (isPlacaCat(c)) {
+        a = m < 11
+          ? (state.actual[c.id]?.[m + 1] || 0)
+          : (state.yearsData?.[state.year + 1]?.actual?.[c.id]?.[0] || 0);
+      } else {
+        a = state.actual[c.id]?.[m] || 0;
+      }
+      const p = state.plan[c.id]?.[m] || 0;
+      sum -= a > 0 ? a : p;
+    });
+
+    // Vrati fleksibilne troškove (što je effectiveExpenseMonth oduzeo)
+    // Preskačemo kategorije koje koriste groupPlan — tamo flexible nema smisla
+    state.categories.expense.forEach(c => {
+      if (!c.flexible || (c.group && state.useGroupPlan?.[c.group])) return;
+      const a = state.actual[c.id]?.[m] || 0;
+      const p = state.plan[c.id]?.[m] || 0;
+      if (m === cm && isBudgetCat(c)) sum += Math.max(a, p);
+      else sum += a > 0 ? a : p;
+    });
+  }
+
+  // Korak 3: dodaj fleksibilne kategorije s godišnjom logikom
+  // Forecast = max(godišnji plan, godišnji actuals) → nema dvostrukog brojanja
+  state.categories.income.forEach(c => {
+    if (!c.flexible) return;
+    const annualPlan = (state.plan[c.id] || []).reduce((s, v) => s + v, 0);
+    const annualActual = (state.actual[c.id] || []).reduce((s, v) => s + v, 0);
+    sum += Math.max(annualPlan, annualActual);
+  });
+  state.categories.expense.forEach(c => {
+    if (!c.flexible || (c.group && state.useGroupPlan?.[c.group])) return;
+    const annualPlan = (state.plan[c.id] || []).reduce((s, v) => s + v, 0);
+    const annualActual = (state.actual[c.id] || []).reduce((s, v) => s + v, 0);
+    sum -= Math.max(annualPlan, annualActual);
+  });
+
   return sum;
 }
 
