@@ -17,14 +17,8 @@ function AppInner() {
 
   useEffect(() => {
     setSyncStatusCallback((msg, type) => setSyncMsg({ msg, type }));
-    const cfg = getSyncConfig();
-    if (cfg.apiKey && cfg.binId) {
-      pullFromCloud(true, remote => {
-        ensurePlanArrays(remote);
-        setStateSilent({ ...remote });
-      }).catch(() => {});
-    }
-    const interval = setInterval(() => {
+
+    function doPull() {
       const c = getSyncConfig();
       if (c.apiKey && c.binId) {
         pullFromCloud(true, remote => {
@@ -32,8 +26,24 @@ function AppInner() {
           setStateSilent({ ...remote });
         }).catch(() => {});
       }
-    }, 60000);
-    return () => clearInterval(interval);
+    }
+
+    // Pull odmah pri pokretanju
+    doPull();
+
+    // Pull svake 30 sekundi
+    const interval = setInterval(doPull, 30000);
+
+    // Pull čim se vratiš na tab/app (ključno za mobitel)
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') doPull();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   function handleTabChange(tab) {
