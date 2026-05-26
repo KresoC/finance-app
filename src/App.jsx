@@ -3,6 +3,7 @@ import { AppProvider, useApp, getSyncConfig, pullFromCloud, setSyncStatusCallbac
 import { ensurePlanArrays } from './store/state.js';
 import Header from './components/Header.jsx';
 import Navigation from './components/Navigation.jsx';
+import FloatingAssistant from './components/FloatingAssistant.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PlanPage from './pages/PlanPage.jsx';
 import ActualsPage from './pages/ActualsPage.jsx';
@@ -63,6 +64,7 @@ function AppInner() {
         {activeTab === 'asistent' && <AssistantPage />}
         {activeTab === 'settings' && <SettingsPage />}
       </main>
+      <FloatingAssistant />
     </div>
   );
 }
