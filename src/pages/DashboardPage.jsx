@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import {
   fmtEUR, currentMonthIdx, currentBalance, projectionYearEnd, plannedEndOfYear,
@@ -513,8 +514,154 @@ function Chart({ state }) {
   );
 }
 
+// ── useIsMobile ─────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const fn = e => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile;
+}
+
+// ── buildGroups: zajednički podaci za mobile i desktop ───────────────────────
+function buildGroups(state, cm) {
+  const groups = [];
+
+  // PRIHODI
+  const incomeItems = [];
+  state.categories.income.forEach(c => {
+    const plan = state.plan[c.id]?.[cm] || 0;
+    const actual = state.actual[c.id]?.[cm] || 0;
+    if (plan > 0 || actual > 0) incomeItems.push({ name: c.name, plan, actual });
+  });
+  const incomePlan = incomeItems.reduce((s, it) => s + it.plan, 0);
+  const incomeActual = incomeItems.reduce((s, it) => s + it.actual, 0);
+  if (incomePlan > 0 || incomeActual > 0)
+    groups.push({ name: 'Prihodi', type: 'income', plan: incomePlan, actual: incomeActual, items: incomeItems });
+
+  // RASHODI — po grupama
+  const groupOrder = [];
+  const groupMap = {};
+  state.categories.expense.forEach(c => {
+    const gn = c.group || 'Ostalo';
+    if (!groupMap[gn]) {
+      groupMap[gn] = { name: gn, type: 'expense', plan: 0, actual: 0, items: [], usesGroupPlan: false };
+      groupOrder.push(gn);
+    }
+    const grp = groupMap[gn];
+    if (c.group && state.useGroupPlan?.[c.group]) {
+      grp.usesGroupPlan = true;
+      grp.plan = state.groupPlan?.[c.group]?.[cm] || 0;
+      const act = state.actual[c.id]?.[cm] || 0;
+      grp.actual += act;
+      if (act > 0) grp.items.push({ name: c.name, plan: 0, actual: act });
+    } else {
+      const plan = state.plan[c.id]?.[cm] || 0;
+      const act = state.actual[c.id]?.[cm] || 0;
+      grp.plan += plan;
+      grp.actual += act;
+      if (plan > 0 || act > 0) grp.items.push({ name: c.name, plan, actual: act });
+    }
+  });
+  groupOrder.forEach(gn => {
+    const grp = groupMap[gn];
+    if (grp.plan > 0 || grp.actual > 0) groups.push(grp);
+  });
+
+  return groups;
+}
+
+// ── barColor: boja progress bara ─────────────────────────────────────────────
+function barColor(pct, isIncome) {
+  if (isIncome) {
+    if (pct >= 100) return 'bar-green';
+    if (pct >= 50)  return 'bar-orange';
+    return 'bar-red';
+  }
+  if (pct > 100) return 'bar-red';
+  if (pct >= 80)  return 'bar-orange';
+  return 'bar-green';
+}
+
+// ── MobileCategoryCards ───────────────────────────────────────────────────────
+function MobileCategoryCards({ groups }) {
+  const [expanded, setExpanded] = useState({});
+  const toggle = name => setExpanded(prev => ({ ...prev, [name]: !prev[name] }));
+
+  return (
+    <div className="cat-cards">
+      {groups.map(grp => {
+        const pct = grp.plan > 0 ? Math.round((grp.actual / grp.plan) * 100) : (grp.actual > 0 ? 999 : 0);
+        const cls = barColor(pct, grp.type === 'income');
+        const isOpen = !!expanded[grp.name];
+        const hasItems = grp.items.length > 0;
+
+        return (
+          <div key={grp.name} className="cat-card">
+            <div
+              className={'cat-card-header' + (hasItems ? ' clickable' : '')}
+              onClick={() => hasItems && toggle(grp.name)}
+            >
+              <div className="cat-card-top">
+                <span className="cat-card-name">{grp.name}</span>
+                <div className="cat-card-right">
+                  <span className="cat-card-amounts">
+                    <strong>{fmtEUR(grp.actual)}</strong>
+                    {grp.plan > 0 && <span className="cat-amounts-plan"> / {fmtEUR(grp.plan)}</span>}
+                  </span>
+                  {hasItems && (
+                    <span className={'cat-card-chevron' + (isOpen ? ' open' : '')}>›</span>
+                  )}
+                </div>
+              </div>
+              {grp.plan > 0 && (
+                <div className="cat-card-bar-wrap">
+                  <div className="cat-card-bar">
+                    <div className={'cat-bar-fill ' + cls} style={{ width: Math.min(pct, 100) + '%' }} />
+                  </div>
+                  <span className={'cat-bar-pct ' + cls}>{pct}%</span>
+                </div>
+              )}
+            </div>
+            {isOpen && hasItems && (
+              <div className="cat-card-items">
+                {grp.items.map((it, i) => (
+                  <div key={i} className="cat-subitem">
+                    <span className="cat-subitem-name">↳ {it.name}</span>
+                    <span className="cat-subitem-val">{fmtEUR(it.actual)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── DashCategoryTable ─────────────────────────────────────────────────────────
 function DashCategoryTable({ state }) {
   const cm = currentMonthIdx(state);
+  const isMobile = useIsMobile();
+  const groups = buildGroups(state, cm);
+
+  if (groups.length === 0) return null;
+
+  // ── MOBILE: kartice ───────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div className="card">
+        <div className="card-title"><h2>Tekuci mjesec — po kategorijama</h2></div>
+        <MobileCategoryCards groups={groups} />
+      </div>
+    );
+  }
+
+  // ── DESKTOP: tablica + progress bar ───────────────────────────────────────
   const all = [
     ...state.categories.income.map(c => ({ ...c, type: 'income' })),
     ...state.categories.expense.map(c => ({ ...c, type: 'expense' }))
@@ -526,26 +673,33 @@ function DashCategoryTable({ state }) {
   all.forEach((c, idx) => {
     const groupLabel = c.type === 'income' ? 'Prihodi' : (c.group || 'Ostalo');
     if (groupLabel !== lastGroup) {
-      rows.push(<tr key={'g-' + groupLabel + idx} className="group-row"><td colSpan={4}>{groupLabel}</td></tr>);
+      rows.push(<tr key={'g-' + groupLabel + idx} className="group-row"><td colSpan={5}>{groupLabel}</td></tr>);
       lastGroup = groupLabel;
     }
     const useGroup = c.group && state.useGroupPlan && state.useGroupPlan[c.group];
     if (useGroup) {
       if (!seenGroups.has(c.group)) {
         seenGroups.add(c.group);
-        const groupPlanVal = (state.groupPlan && state.groupPlan[c.group] && state.groupPlan[c.group][cm]) || 0;
+        const groupPlanVal = state.groupPlan?.[c.group]?.[cm] || 0;
         let groupActual = 0;
         state.categories[c.type].forEach(cc => {
-          if (cc.group === c.group) groupActual += (state.actual[cc.id] && state.actual[cc.id][cm]) || 0;
+          if (cc.group === c.group) groupActual += state.actual[cc.id]?.[cm] || 0;
         });
         const delta = groupActual - groupPlanVal;
-        const deltaClass = c.type === 'expense' ? (delta > 0 ? 'delta-neg' : delta < 0 ? 'delta-pos' : '') : (delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : '');
+        const deltaClass = c.type === 'expense'
+          ? (delta > 0 ? 'delta-neg' : delta < 0 ? 'delta-pos' : '')
+          : (delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : '');
+        const pct = groupPlanVal > 0 ? Math.round((groupActual / groupPlanVal) * 100) : 0;
+        const cls = barColor(pct, c.type === 'income');
         rows.push(
           <tr key={'ug-' + c.group} style={{ background: '#fefce8' }}>
             <td className="cat-name"><b>{c.group} UKUPNO</b></td>
             <td className="num"><b>{fmtEUR(groupPlanVal)}</b></td>
             <td className="num"><b>{fmtEUR(groupActual)}</b></td>
             <td className={'num ' + deltaClass}><b>{(delta >= 0 ? '+' : '') + fmtEUR(delta)}</b></td>
+            <td className="bar-cell">
+              {groupPlanVal > 0 && <div className="mini-bar"><div className={'mini-bar-fill ' + cls} style={{ width: Math.min(pct, 100) + '%' }} /></div>}
+            </td>
           </tr>
         );
       }
@@ -557,6 +711,7 @@ function DashCategoryTable({ state }) {
             <td className="num muted">—</td>
             <td className="num">{fmtEUR(actual)}</td>
             <td className="num"></td>
+            <td className="bar-cell"></td>
           </tr>
         );
       }
@@ -566,13 +721,20 @@ function DashCategoryTable({ state }) {
     const actual = state.actual[c.id]?.[cm] || 0;
     if (plan === 0 && actual === 0) return;
     const delta = actual - plan;
-    const deltaClass = c.type === 'expense' ? (delta > 0 ? 'delta-neg' : delta < 0 ? 'delta-pos' : '') : (delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : '');
+    const deltaClass = c.type === 'expense'
+      ? (delta > 0 ? 'delta-neg' : delta < 0 ? 'delta-pos' : '')
+      : (delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : '');
+    const pct = plan > 0 ? Math.round((actual / plan) * 100) : 0;
+    const cls = barColor(pct, c.type === 'income');
     rows.push(
       <tr key={c.id}>
         <td className="cat-name">{c.name}</td>
         <td className="num">{fmtEUR(plan)}</td>
         <td className="num">{fmtEUR(actual)}</td>
         <td className={'num ' + deltaClass}>{(delta >= 0 ? '+' : '') + fmtEUR(delta)}</td>
+        <td className="bar-cell">
+          {plan > 0 && <div className="mini-bar"><div className={'mini-bar-fill ' + cls} style={{ width: Math.min(pct, 100) + '%' }} /></div>}
+        </td>
       </tr>
     );
   });
@@ -581,7 +743,7 @@ function DashCategoryTable({ state }) {
     <details className="advanced-details">
       <summary className="advanced-summary">Prikazi detalje mjeseca po kategorijama</summary>
       <div className="card">
-        <div className="card-title"><h2>Tekuci mjesec - po kategorijama</h2></div>
+        <div className="card-title"><h2>Tekuci mjesec — po kategorijama</h2></div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -590,6 +752,7 @@ function DashCategoryTable({ state }) {
                 <th className="num">Plan</th>
                 <th className="num">Stvarno</th>
                 <th className="num">Razlika</th>
+                <th className="bar-cell">Status</th>
               </tr>
             </thead>
             <tbody>{rows}</tbody>

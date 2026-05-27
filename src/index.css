@@ -504,3 +504,108 @@ td.inactive-cell.col-current { background: #f0f9ff; }
   .floating-ai-btn { bottom: 24px; }
   .floating-ai-drawer { max-width: 420px; right: 16px; left: auto; border-radius: 20px 20px 0 0; }
 }
+
+/* ── Mobile category cards ─────────────────────────────────────────────────── */
+.cat-cards { display: flex; flex-direction: column; gap: 8px; }
+
+.cat-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cat-card-header { padding: 11px 13px 10px; }
+.cat-card-header.clickable { cursor: pointer; }
+.cat-card-header.clickable:active { background: #f8fafc; }
+
+.cat-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cat-card-name { font-weight: 600; font-size: 0.93rem; color: #0f172a; }
+
+.cat-card-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.cat-card-amounts { font-size: 0.9rem; color: #0f172a; }
+.cat-amounts-plan { color: #94a3b8; font-size: 0.82rem; }
+
+.cat-card-chevron {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  transition: transform 0.2s;
+  display: inline-block;
+  line-height: 1;
+}
+.cat-card-chevron.open { transform: rotate(90deg); }
+
+.cat-card-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat-card-bar {
+  flex: 1;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cat-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.cat-bar-pct { font-size: 0.75rem; font-weight: 600; min-width: 34px; text-align: right; }
+
+/* Colour tokens shared by mobile bars and desktop mini-bars */
+.bar-green .cat-bar-fill, .cat-bar-fill.bar-green { background: #10b981; }
+.bar-orange .cat-bar-fill, .cat-bar-fill.bar-orange { background: #f59e0b; }
+.bar-red .cat-bar-fill, .cat-bar-fill.bar-red { background: #ef4444; }
+.cat-bar-pct.bar-green { color: #059669; }
+.cat-bar-pct.bar-orange { color: #d97706; }
+.cat-bar-pct.bar-red { color: #dc2626; }
+
+.cat-card-items {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  padding: 6px 13px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cat-subitem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.84rem;
+}
+.cat-subitem-name { color: #475569; }
+.cat-subitem-val  { font-weight: 500; color: #0f172a; }
+
+/* ── Desktop table progress bar column ─────────────────────────────────────── */
+.bar-cell { width: 80px; padding: 0 8px !important; vertical-align: middle; }
+
+.mini-bar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 50px;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+.mini-bar-fill.bar-green  { background: #10b981; }
+.mini-bar-fill.bar-orange { background: #f59e0b; }
+.mini-bar-fill.bar-red    { background: #ef4444; }
