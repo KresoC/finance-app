@@ -120,7 +120,8 @@ async function callGeminiExplainer(messages, systemPrompt) {
     throw new Error('Gemini greška (' + resp.status + '): ' + txt.slice(0, 200));
   }
   const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.map(p => p.text || '').join('');
   if (!text) throw new Error('Prazan odgovor od Gemini-ja.');
   return text;
 }
