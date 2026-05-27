@@ -514,27 +514,6 @@ function PlanGridMobile({ typeView }) {
     updateState(newState);
   }
 
-  function copyFromPrev() {
-    if (activeMonth === 0) return;
-    const prev = activeMonth - 1;
-    const newState = { ...state, plan: { ...state.plan }, groupPlan: { ...state.groupPlan } };
-    const seenG = new Set();
-    cats.forEach(c => {
-      if (c.group && state.useGroupPlan?.[c.group]) {
-        if (seenG.has(c.group)) return;
-        seenG.add(c.group);
-        const arr = [...(state.groupPlan[c.group] || new Array(12).fill(0))];
-        arr[activeMonth] = arr[prev];
-        newState.groupPlan[c.group] = arr;
-      } else {
-        const arr = [...(state.plan[c.id] || new Array(12).fill(0))];
-        arr[activeMonth] = arr[prev];
-        newState.plan[c.id] = arr;
-      }
-    });
-    updateState(newState);
-  }
-
   // Build items for active month
   const items = [];
   const seenG = new Set();
@@ -633,13 +612,6 @@ function PlanGridMobile({ typeView }) {
             ))
         }
       </div>
-
-      {/* ── Kopiraj iz prošlog ── */}
-      {activeMonth > 0 && (
-        <button className="btn secondary plan-copy-btn" onClick={copyFromPrev}>
-          ← Kopiraj iz {MONTHS_LONG[activeMonth - 1]}
-        </button>
-      )}
 
       {/* ── Collapsible sažetak ── */}
       <div className="plan-mobile-summary">
