@@ -892,3 +892,15 @@ td.inactive-cell.col-current { background: #f0f9ff; }
   font-size: 0.9rem;
   text-align: right;
 }
+
+/* ── Actuals mobile ──────────────────────────────────────────────────────── */
+.actuals-group-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #94a3b8;
+  padding: 12px 0 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.actuals-row-inactive { opacity: 0.4; }

@@ -1,13 +1,31 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import DataGrid from '../components/DataGrid.jsx';
-import { fmtEUR, currentMonthIdx, actualIncomeMonth, actualExpenseMonth, plannedIncomeMonth, plannedExpenseMonth, todayStr, MONTHS_LONG } from '../utils/finance.js';
+import {
+  fmtEUR, currentMonthIdx,
+  actualIncomeMonth, actualExpenseMonth,
+  plannedIncomeMonth, plannedExpenseMonth,
+  todayStr, MONTHS_LONG
+} from '../utils/finance.js';
 import { parseQuickAdd } from '../utils/quickAdd.js';
-import { MONTHS_LONG as ML } from '../store/state.js';
+import { MONTHS_LONG as ML, ALL_MONTHS } from '../store/state.js';
 
+// ── useIsMobile ──────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const fn = e => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile;
+}
+
+// ── QuickAdd ─────────────────────────────────────────────────────────────────
 function QuickAdd() {
   const { state, updateState } = useApp();
-  const [value, setValue] = useState('');
+  const [value, setValue]       = useState('');
   const [feedback, setFeedback] = useState(null);
 
   function submit() {
@@ -21,13 +39,13 @@ function QuickAdd() {
       r.months.forEach(m => { newState.plan[r.catId][m] = r.amount; });
       updateState(newState);
       setValue('');
-      const monthsLabel = r.months.length === 12 ? 'svih 12 mjeseci' : r.months.map(m => ML[m]).join(', ');
-      setFeedback({ type: 'good', text: '✓ PLAN: ' + (r.type === 'income' ? 'Prihod' : 'Trosak') + ' ' + fmtEUR(r.amount) + ' u "' + r.catName + '" za ' + monthsLabel });
+      const ml = r.months.length === 12 ? 'svih 12 mj.' : r.months.map(m => ML[m]).join(', ');
+      setFeedback({ type: 'good', text: '✓ PLAN: ' + (r.type === 'income' ? 'Prihod' : 'Trosak') + ' ' + fmtEUR(r.amount) + ' u "' + r.catName + '" za ' + ml });
       setTimeout(() => setFeedback(null), 4000);
       return;
     }
 
-    // Cross-year placa check
+    // Cross-year placa
     if (r.type === 'income' && /pla[cć]a/i.test(r.catName) && r.month === 0) {
       const py = state.year - 1;
       const pyd = state.yearsData && state.yearsData[py];
@@ -84,6 +102,7 @@ function QuickAdd() {
   );
 }
 
+// ── ActivityFeed ──────────────────────────────────────────────────────────────
 function ActivityFeed() {
   const { state, updateState } = useApp();
   const entries = (state.recentEntries || []).slice(0, 10);
@@ -140,20 +159,21 @@ function ActivityFeed() {
   ));
 }
 
+// ── MonthlyReality ────────────────────────────────────────────────────────────
 function MonthlyReality({ state }) {
-  const cm = currentMonthIdx(state);
-  const ia = actualIncomeMonth(state, cm);
-  const ea = actualExpenseMonth(state, cm);
+  const cm  = currentMonthIdx(state);
+  const ia  = actualIncomeMonth(state, cm);
+  const ea  = actualExpenseMonth(state, cm);
   const net = ia - ea;
   const planNet = plannedIncomeMonth(state, cm) - plannedExpenseMonth(state, cm);
-  const diff = net - planNet;
+  const diff    = net - planNet;
 
   let statusText, statusCls;
-  if (planNet === 0 && net === 0) { statusText = 'Nema podataka'; statusCls = ''; }
-  else if (planNet === 0) { statusText = '⚠ Nema plana'; statusCls = 'warn'; }
-  else if (Math.abs(diff) < 50) { statusText = '🟢 Po planu'; statusCls = 'good'; }
-  else if (diff > 0) { statusText = '🟢 ' + fmtEUR(diff) + ' bolje od plana'; statusCls = 'good'; }
-  else { statusText = '🔴 ' + fmtEUR(Math.abs(diff)) + ' losije od plana'; statusCls = 'bad'; }
+  if (planNet === 0 && net === 0)    { statusText = 'Nema podataka';           statusCls = ''; }
+  else if (planNet === 0)             { statusText = '⚠ Nema plana';            statusCls = 'warn'; }
+  else if (Math.abs(diff) < 50)      { statusText = '🟢 Po planu';             statusCls = 'good'; }
+  else if (diff > 0)                  { statusText = '🟢 ' + fmtEUR(diff) + ' bolje od plana'; statusCls = 'good'; }
+  else                                { statusText = '🔴 ' + fmtEUR(Math.abs(diff)) + ' losije od plana'; statusCls = 'bad'; }
 
   return (
     <div className="card">
@@ -173,8 +193,137 @@ function MonthlyReality({ state }) {
   );
 }
 
+// ── ActualsMobileRow ──────────────────────────────────────────────────────────
+function ActualsMobileRow({ name, val, isActive, onUpdate }) {
+  const [editing, setEditing]   = useState(false);
+  const [localVal, setLocalVal] = useState(val > 0 ? String(Math.round(val)) : '');
+  const inputRef                = useRef(null);
+
+  function startEdit() {
+    setEditing(true);
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 40);
+  }
+
+  function commit() {
+    onUpdate(localVal);
+    setEditing(false);
+  }
+
+  return (
+    <div className={'plan-mobile-row' + (!isActive && val === 0 ? ' actuals-row-inactive' : '')}>
+      <span className={'plan-mobile-cat-name' + (!isActive && val === 0 ? ' muted' : '')}>
+        {name}
+      </span>
+      <div className="plan-mobile-row-right">
+        {editing ? (
+          <input
+            ref={inputRef}
+            className="plan-mobile-input"
+            type="number"
+            inputMode="numeric"
+            step="1"
+            value={localVal}
+            onChange={e => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') inputRef.current?.blur();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+          />
+        ) : (
+          <button
+            className={'plan-mobile-amount' + (val > 0 ? '' : ' empty')}
+            onClick={startEdit}
+          >
+            {val > 0 ? fmtEUR(val) : (!isActive ? <span>—</span> : <span>unesi</span>)}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── ActualsGridMobile ─────────────────────────────────────────────────────────
+function ActualsGridMobile({ typeView }) {
+  const { state, updateState } = useApp();
+  const curM = currentMonthIdx(state);
+  const [activeMonth, setActiveMonth] = useState(curM);
+
+  const cats = state.categories[typeView];
+
+  function updateCell(catId, val) {
+    const v = parseFloat(val) || 0;
+    const newState = { ...state, actual: { ...state.actual } };
+    newState.actual[catId] = [...(state.actual[catId] || new Array(12).fill(0))];
+    newState.actual[catId][activeMonth] = v;
+    updateState(newState);
+  }
+
+  const monthTotal = typeView === 'income'
+    ? actualIncomeMonth(state, activeMonth)
+    : actualExpenseMonth(state, activeMonth);
+  const monthPlan = typeView === 'income'
+    ? plannedIncomeMonth(state, activeMonth)
+    : plannedExpenseMonth(state, activeMonth);
+  const pct = monthPlan > 0 ? Math.round((monthTotal / monthPlan) * 100) : null;
+
+  // Build list with group headers (expense only)
+  const rows = [];
+  let lastGroup = null;
+  cats.forEach(c => {
+    const groupLabel = c.group || 'Ostalo';
+    if (typeView === 'expense' && groupLabel !== lastGroup) {
+      rows.push({ type: 'header', label: groupLabel, key: 'h-' + groupLabel });
+      lastGroup = groupLabel;
+    }
+    const months   = c.months || ALL_MONTHS;
+    const isActive = months.includes(activeMonth);
+    const val      = state.actual[c.id]?.[activeMonth] || 0;
+    rows.push({ type: 'cat', key: c.id, name: c.name, val, isActive, catId: c.id });
+  });
+
+  return (
+    <div className="plan-mobile">
+      {/* Navigacija */}
+      <div className="plan-month-nav">
+        <button className="plan-nav-btn" onClick={() => setActiveMonth(m => m - 1)} disabled={activeMonth === 0}>‹</button>
+        <div className="plan-month-center">
+          <span className="plan-month-name">{MONTHS_LONG[activeMonth]} {state.year}</span>
+          <span className={'plan-month-total ' + (typeView === 'income' ? 'pos' : 'neg')}>
+            {typeView === 'income' ? '+' : '−'}{fmtEUR(monthTotal)}
+            {monthPlan > 0 && (
+              <span className="muted" style={{ fontWeight: 400 }}> / {fmtEUR(monthPlan)}{pct !== null ? ' (' + pct + '%)' : ''}</span>
+            )}
+          </span>
+        </div>
+        <button className="plan-nav-btn" onClick={() => setActiveMonth(m => m + 1)} disabled={activeMonth === 11}>›</button>
+      </div>
+
+      {/* Stavke */}
+      <div className="plan-mobile-rows">
+        {rows.map(row => {
+          if (row.type === 'header') {
+            return <div key={row.key} className="actuals-group-header">{row.label}</div>;
+          }
+          return (
+            <ActualsMobileRow
+              key={row.key + '-' + activeMonth}
+              name={row.name}
+              val={row.val}
+              isActive={row.isActive}
+              onUpdate={v => updateCell(row.catId, v)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── ActualsPage ───────────────────────────────────────────────────────────────
 export default function ActualsPage() {
-  const { state } = useApp();
+  const { state }   = useApp();
+  const isMobile    = useIsMobile();
   const [actualType, setActualType] = useState('income');
 
   return (
@@ -187,20 +336,36 @@ export default function ActualsPage() {
         </ul>
       </div>
       <MonthlyReality state={state} />
+
       <div className={'type-toggle ' + actualType} style={{ marginTop: '4px' }}>
-        <button className={actualType === 'income' ? 'active' : ''} onClick={() => setActualType('income')}>Prihodi</button>
+        <button className={actualType === 'income'  ? 'active' : ''} onClick={() => setActualType('income')}>Prihodi</button>
         <button className={actualType === 'expense' ? 'active' : ''} onClick={() => setActualType('expense')}>Troskovi</button>
       </div>
-      <details className="advanced-details">
-        <summary className="advanced-summary">Napredni unos (po mjesecima i kategorijama)</summary>
-        <div className="card">
-          <div className="card-title"><h2>Stvarni iznosi</h2><span className="muted">EUR</span></div>
-          <p className="muted" style={{ marginTop: 0 }}>Direktan unos po mjesecima i kategorijama. Sive celije (-) znace da kategorija nije aktivna za taj mjesec.</p>
-          <div className="table-wrap">
-            <DataGrid tableId="actualTable" typeView={actualType} gridKey="actual" allowFillAll={false} />
+
+      {isMobile ? (
+        /* ── Mobilni prikaz ── */
+        <div className="card" style={{ marginTop: '8px' }}>
+          <div className="card-title">
+            <h2>Unos po kategorijama</h2>
+            <span className="muted">EUR</span>
           </div>
+          <ActualsGridMobile typeView={actualType} />
         </div>
-      </details>
+      ) : (
+        /* ── Desktop prikaz (tablica) ── */
+        <details className="advanced-details">
+          <summary className="advanced-summary">Napredni unos (po mjesecima i kategorijama)</summary>
+          <div className="card">
+            <div className="card-title"><h2>Stvarni iznosi</h2><span className="muted">EUR</span></div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Direktan unos po mjesecima i kategorijama. Sive celije (-) znace da kategorija nije aktivna za taj mjesec.
+            </p>
+            <div className="table-wrap">
+              <DataGrid tableId="actualTable" typeView={actualType} gridKey="actual" allowFillAll={false} />
+            </div>
+          </div>
+        </details>
+      )}
     </section>
   );
 }
