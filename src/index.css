@@ -639,7 +639,8 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .annual-badge { font-size: 0.75rem; margin-left: 3px; vertical-align: middle; opacity: 0.75; }
 
 @media (max-width: 767px) {
-  .plan-page-layout   { flex-direction: column; }
+  .plan-page-layout   { flex-direction: column; align-items: stretch; }
+  .plan-page-main     { width: 100%; }
   .plan-summary-sidebar { display: none; } /* replaced by inline collapsible */
 }
 
