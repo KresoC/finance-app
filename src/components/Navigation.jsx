@@ -4,7 +4,7 @@ export default function Navigation({ activeTab, onTabChange }) {
     { id: 'plan', icon: '📋', label: 'Plan' },
     { id: 'actual', icon: '💰', label: 'Stvarno' },
     { id: 'monthly', icon: '📅', label: 'Mjeseci' },
-    { id: 'asistent', icon: '🤖', label: 'Asistent' },
+    { id: 'trezor', icon: '📈', label: 'Ulaganja' },
     { id: 'settings', icon: '⚙️', label: 'Postavke' },
   ];
 

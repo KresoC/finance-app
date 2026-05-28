@@ -40,7 +40,8 @@ export function defaultState() {
     actual: {},
     groupPlan: {},
     useGroupPlan: {},
-    entries: []
+    entries: [],
+    investments: []
   };
 }
 
@@ -82,6 +83,7 @@ export function loadState() {
         });
         parsed._migratedV2 = true;
       }
+      if (!parsed.investments) parsed.investments = [];
       ensurePlanArrays(parsed);
       return parsed;
     }

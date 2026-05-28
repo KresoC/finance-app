@@ -9,6 +9,7 @@ import PlanPage from './pages/PlanPage.jsx';
 import ActualsPage from './pages/ActualsPage.jsx';
 import MonthlyPage from './pages/MonthlyPage.jsx';
 import AssistantPage from './pages/AssistantPage.jsx';
+import TrezorPage from './pages/TrezorPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 
 function AppInner() {
@@ -62,6 +63,7 @@ function AppInner() {
         {activeTab === 'actual' && <ActualsPage />}
         {activeTab === 'monthly' && <MonthlyPage />}
         {activeTab === 'asistent' && <AssistantPage />}
+        {activeTab === 'trezor'   && <TrezorPage />}
         {activeTab === 'settings' && <SettingsPage />}
       </main>
       <FloatingAssistant />
