@@ -165,7 +165,7 @@ function AddModal({ prefill, onClose }) {
 
           <label className="inv-field-label">Trajanje</label>
           <div className="inv-days-row">
-            {[91, 182, 364].map(d => (
+            {[91, 364].map(d => (
               <button
                 key={d}
                 type="button"
