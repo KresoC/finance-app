@@ -21,6 +21,7 @@ export default function MonthlyPage() {
   const { state } = useApp();
   const isMobile  = useIsMobile();
   const cm = currentMonthIdx(state);
+  const [expandedMonth, setExpandedMonth] = useState(null);
 
   // Tekući mjesec — plan / stvarno / odstupanje
   const ip = plannedIncomeMonth(state, cm);
@@ -68,15 +69,19 @@ export default function MonthlyPage() {
   const before = m => startIsThisYear(state) && m < sm;
   let tpn = 0, tan = 0;
   const monthData = Array.from({ length: 12 }, (_, m) => {
-    const pn         = plannedIncomeMonth(state, m) - plannedExpenseMonth(state, m);
-    const an         = actualIncomeMonth(state, m)  - actualExpenseMonth(state, m);
+    const pi         = plannedIncomeMonth(state, m);
+    const pe         = plannedExpenseMonth(state, m);
+    const ai         = actualIncomeMonth(state, m);
+    const ae         = actualExpenseMonth(state, m);
+    const pn         = pi - pe;
+    const an         = ai - ae;
     const isCurrent  = m === cm;
     const isBefore   = before(m);
     const showActual = !isBefore && m <= cm;
     const diff       = an - pn;
     tpn += pn;
     if (showActual) tan += an;
-    return { m, pn, an, isCurrent, isBefore, showActual, diff };
+    return { m, pi, pe, ai, ae, pn, an, isCurrent, isBefore, showActual, diff };
   });
 
   return (
@@ -174,36 +179,78 @@ export default function MonthlyPage() {
         {isMobile ? (
           /* ── Mobile: vertikalna lista ── */
           <div className="monthly-list">
-            {monthData.map(({ m, pn, an, isCurrent, isBefore, showActual, diff }) => (
-              <div
-                key={m}
-                className={
-                  'monthly-list-row' +
-                  (isCurrent ? ' current' : '') +
-                  (isBefore  ? ' before'  : '')
-                }
-              >
-                <span className="monthly-list-month">{MONTHS_LONG[m]}</span>
-                <div className="monthly-list-right">
-                  {showActual ? (
-                    <>
-                      <span className={'monthly-list-value ' + (an >= 0 ? 'pos' : 'neg')}>
-                        {(an >= 0 ? '+' : '') + fmtEUR(an)}
-                      </span>
-                      {Math.abs(diff) >= 1 && (
-                        <span className={'monthly-list-diff ' + (diff >= 0 ? 'pos' : 'neg')}>
-                          vs plan {diff >= 0 ? '+' : ''}{fmtEUR(diff)}
+            {monthData.map(({ m, pi, pe, ai, ae, pn, an, isCurrent, isBefore, showActual, diff }) => {
+              const isExpanded = expandedMonth === m;
+              const toggle = () => setExpandedMonth(isExpanded ? null : m);
+              return (
+                <div key={m}>
+                  <div
+                    className={
+                      'monthly-list-row clickable' +
+                      (isCurrent  ? ' current'  : '') +
+                      (isBefore   ? ' before'   : '') +
+                      (isExpanded ? ' expanded' : '')
+                    }
+                    onClick={toggle}
+                  >
+                    <span className="monthly-list-month">{MONTHS_LONG[m]}</span>
+                    <div className="monthly-list-right">
+                      {showActual ? (
+                        <>
+                          <span className={'monthly-list-value ' + (an >= 0 ? 'pos' : 'neg')}>
+                            {(an >= 0 ? '+' : '') + fmtEUR(an)}
+                          </span>
+                          {Math.abs(diff) >= 1 && (
+                            <span className={'monthly-list-diff ' + (diff >= 0 ? 'pos' : 'neg')}>
+                              vs plan {diff >= 0 ? '+' : ''}{fmtEUR(diff)}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="monthly-list-plan muted">
+                          plan {(pn >= 0 ? '+' : '') + fmtEUR(pn)}
                         </span>
                       )}
-                    </>
-                  ) : (
-                    <span className="monthly-list-plan muted">
-                      plan {(pn >= 0 ? '+' : '') + fmtEUR(pn)}
-                    </span>
+                      <span className="monthly-list-chevron">{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="monthly-list-detail">
+                      <table className="mld-table">
+                        <thead>
+                          <tr>
+                            <th></th>
+                            <th>Plan</th>
+                            {showActual && <th>Stvarno</th>}
+                            {showActual && <th>±</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="mld-label">Prihodi</td>
+                            <td className="num">{fmtEUR(pi)}</td>
+                            {showActual && <td className="num pos">{fmtEUR(ai)}</td>}
+                            {showActual && (() => { const d = ai - pi; return <td className={'num ' + (d >= 0 ? 'pos' : 'neg')}>{(d >= 0 ? '+' : '') + fmtEUR(d)}</td>; })()}
+                          </tr>
+                          <tr>
+                            <td className="mld-label">Troškovi</td>
+                            <td className="num">{fmtEUR(pe)}</td>
+                            {showActual && <td className="num neg">{fmtEUR(ae)}</td>}
+                            {showActual && (() => { const d = ae - pe; return <td className={'num ' + (d > 0 ? 'neg' : 'pos')}>{(d >= 0 ? '+' : '') + fmtEUR(d)}</td>; })()}
+                          </tr>
+                          <tr className="mld-neto-row">
+                            <td className="mld-label"><b>Neto</b></td>
+                            <td className={'num ' + (pn >= 0 ? 'pos' : 'neg')}><b>{fmtEUR(pn)}</b></td>
+                            {showActual && <td className={'num ' + (an >= 0 ? 'pos' : 'neg')}><b>{fmtEUR(an)}</b></td>}
+                            {showActual && <td className={'num ' + (diff >= 0 ? 'pos' : 'neg')}><b>{(diff >= 0 ? '+' : '') + fmtEUR(diff)}</b></td>}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div className="monthly-list-row total">
               <span className="monthly-list-month"><b>Ukupno</b></span>
               <div className="monthly-list-right">

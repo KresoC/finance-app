@@ -978,3 +978,49 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .monthly-list-value { font-size: 0.92rem; font-weight: 600; }
 .monthly-list-plan  { font-size: 0.85rem; }
 .monthly-list-diff  { font-size: 0.74rem; font-weight: 500; }
+
+.monthly-list-row.clickable { cursor: pointer; user-select: none; }
+.monthly-list-row.clickable:active { background: #f8fafc; }
+.monthly-list-row.expanded { border-bottom-color: transparent; }
+.monthly-list-chevron {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  margin-left: 6px;
+  line-height: 1;
+}
+
+/* Detail panel that opens below a month row */
+.monthly-list-detail {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px 6px;
+  margin: 0 -10px 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.mld-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.mld-table th {
+  text-align: right;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  padding: 0 4px 6px;
+  font-weight: 600;
+}
+.mld-table th:first-child { text-align: left; }
+.mld-table td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: right;
+}
+.mld-table td:first-child { text-align: left; }
+.mld-label { color: #64748b; font-size: 0.82rem; }
+.mld-neto-row td {
+  border-top: 1px solid #e2e8f0;
+  border-bottom: none;
+  padding-top: 7px;
+}
