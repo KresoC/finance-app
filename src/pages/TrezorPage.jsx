@@ -2,10 +2,6 @@ import { useState } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import { fmtEUR } from '../utils/finance.js';
 
-// ─── Konstante ──────────────────────────────────────────────────────────────
-
-const TAX_RATE = 0.10; // 10% porez na prihod od kamata (HR)
-
 // ─── Pomoćne funkcije ───────────────────────────────────────────────────────
 
 function uid() {
@@ -37,16 +33,15 @@ function fmtPct(v) {
   return Number(v).toLocaleString('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 }
 
-function grossInterest(amount, rate, days) {
+// Fizičke osobe ne plaćaju porez na trezorske zapise RH — prinos = bruto = neto
+function calcInterest(amount, rate, days) {
   return amount * (rate / 100) * (days / 365);
 }
-function netInterest(amount, rate, days) {
-  return grossInterest(amount, rate, days) * (1 - TAX_RATE);
-}
-function accruedGross(inv) {
+
+function calcAccrued(inv) {
   const t = todayStr();
   const elapsed = Math.max(0, Math.min(daysBetween(inv.date, t), inv.days));
-  return grossInterest(inv.amount, inv.rate, elapsed);
+  return calcInterest(inv.amount, inv.rate, elapsed);
 }
 
 // ─── AddModal ───────────────────────────────────────────────────────────────
@@ -55,25 +50,23 @@ function AddModal({ prefill, onClose }) {
   const { state, updateState } = useApp();
   const isReinvest = !!prefill?.reinvestedFromId;
 
-  const [amount,      setAmount]      = useState(isReinvest ? '' : '');
+  const [amount,      setAmount]      = useState('');
   const [extraAmount, setExtraAmount] = useState('');
   const [rate,        setRate]        = useState(prefill?.rate ? String(prefill.rate) : '');
   const [date,        setDate]        = useState(prefill?.date || todayStr());
   const [days,        setDays]        = useState(String(prefill?.days || 364));
   const [notes,       setNotes]       = useState('');
 
-  // Iznos za reinvest: prikazuje se fiksno, a korisnik može dodati još
-  const baseAmount   = prefill?.amount ? parseFloat(prefill.amount) : 0;
-  const extraParsed  = parseFloat(extraAmount) || 0;
-  const totalAmount  = isReinvest
+  const baseAmount  = prefill?.amount ? parseFloat(prefill.amount) : 0;
+  const extraParsed = parseFloat(extraAmount) || 0;
+  const totalAmount = isReinvest
     ? baseAmount + extraParsed
     : (parseFloat(amount) || 0);
 
   const daysNum      = parseInt(days) || 364;
   const rateNum      = parseFloat(rate) || 0;
   const maturityDate = date ? addDays(date, daysNum) : '';
-  const previewGross = totalAmount && rateNum ? grossInterest(totalAmount, rateNum, daysNum) : null;
-  const previewNet   = previewGross !== null ? previewGross * (1 - TAX_RATE) : null;
+  const previewInt   = totalAmount && rateNum ? calcInterest(totalAmount, rateNum, daysNum) : null;
 
   function save() {
     if (!totalAmount || !rateNum || !date || !daysNum) return;
@@ -108,7 +101,6 @@ function AddModal({ prefill, onClose }) {
         </div>
         <div className="fill-modal-body">
 
-          {/* Reinvest: prikaži iznos koji dolazi s dospijeća */}
           {isReinvest && (
             <div className="inv-reinvest-banner">
               <div className="inv-reinvest-meta">Iznos po dospijeću</div>
@@ -130,7 +122,6 @@ function AddModal({ prefill, onClose }) {
             </div>
           )}
 
-          {/* Novo ulaganje: iznos */}
           {!isReinvest && (
             <>
               <label className="inv-field-label">Iznos (EUR)</label>
@@ -195,23 +186,15 @@ function AddModal({ prefill, onClose }) {
             onChange={e => setNotes(e.target.value)}
           />
 
-          {previewGross !== null && (
+          {previewInt !== null && (
             <div className="inv-preview-box">
               <div className="inv-preview-row">
-                <span>Prinos bruto</span>
-                <span className="pos">{fmtEUR(previewGross)}</span>
-              </div>
-              <div className="inv-preview-row">
-                <span>Porez (~10%)</span>
-                <span className="neg">−{fmtEUR(previewGross * TAX_RATE)}</span>
+                <span>Prinos</span>
+                <span className="pos">{fmtEUR(previewInt)}</span>
               </div>
               <div className="inv-preview-row inv-preview-neto">
-                <span><b>Prinos neto</b></span>
-                <span className="pos"><b>{fmtEUR(previewNet)}</b></span>
-              </div>
-              <div className="inv-preview-row">
-                <span>Vrijednost po dospijeću</span>
-                <b>{fmtEUR(totalAmount + previewNet)}</b>
+                <span><b>Vrijednost po dospijeću</b></span>
+                <b>{fmtEUR(totalAmount + previewInt)}</b>
               </div>
             </div>
           )}
@@ -233,26 +216,22 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
   const [open, setOpen] = useState(false);
   const t = todayStr();
 
-  const daysRem     = daysBetween(t, inv.maturityDate);
-  const isExpired   = daysRem <= 0 && inv.status === 'active';
-  const grossM      = grossInterest(inv.amount, inv.rate, inv.days);
-  const netM        = netInterest(inv.amount, inv.rate, inv.days);
-  const accGross    = accruedGross(inv);
-  const accNet      = accGross * (1 - TAX_RATE);
+  const daysRem   = daysBetween(t, inv.maturityDate);
+  const isExpired = daysRem <= 0 && inv.status === 'active';
+  const interest  = calcInterest(inv.amount, inv.rate, inv.days);
+  const accrued   = calcAccrued(inv);
 
-  const statusLabel = inv.status === 'reinvested'   ? '↩ Reinvestirano'
-                    : inv.status === 'matured'        ? '✅ Naplaćeno'
-                    : isExpired                        ? '⏰ Dospjelo'
-                    :                                   '🟢 Aktivno';
+  const statusLabel = inv.status === 'reinvested' ? '↩ Reinvestirano'
+                    : inv.status === 'matured'     ? '✅ Naplaćeno'
+                    : isExpired                     ? '⏰ Dospjelo'
+                    :                                '🟢 Aktivno';
 
   const cardCls = 'inv-card'
-    + (isExpired        ? ' inv-expired'    : '')
-    + (inv.status === 'reinvested' ? ' inv-done' : '')
-    + (inv.status === 'matured'    ? ' inv-done' : '');
+    + (isExpired                         ? ' inv-expired' : '')
+    + (inv.status === 'reinvested' || inv.status === 'matured' ? ' inv-done' : '');
 
   return (
     <div className={cardCls}>
-      {/* Gornji red: iznos + status, klik razvija */}
       <div className="inv-card-summary" onClick={() => setOpen(o => !o)}>
         <div className="inv-card-left">
           <div className="inv-card-amount">{fmtEUR(inv.amount)}</div>
@@ -274,7 +253,6 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
         <span className="inv-card-chevron">{open ? '▲' : '▼'}</span>
       </div>
 
-      {/* Detalji */}
       {open && (
         <div className="inv-card-detail">
           <table className="inv-detail-table">
@@ -288,25 +266,17 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
                 <td><b>{fmtDate(inv.maturityDate)}</b></td>
               </tr>
               <tr>
-                <td>Prinos bruto</td>
-                <td className="pos">{fmtEUR(grossM)}</td>
-              </tr>
-              <tr>
-                <td>Porez (~10%)</td>
-                <td className="neg">−{fmtEUR(grossM * TAX_RATE)}</td>
-              </tr>
-              <tr>
-                <td><b>Prinos neto</b></td>
-                <td className="pos"><b>{fmtEUR(netM)}</b></td>
+                <td>Prinos</td>
+                <td className="pos">{fmtEUR(interest)}</td>
               </tr>
               <tr className="inv-detail-total">
                 <td><b>Vrijednost po dospijeću</b></td>
-                <td><b>{fmtEUR(inv.amount + netM)}</b></td>
+                <td><b>{fmtEUR(inv.amount + interest)}</b></td>
               </tr>
               {inv.status === 'active' && !isExpired && (
                 <tr>
-                  <td>Obračunato danas (neto)</td>
-                  <td className="pos">{fmtEUR(accNet)}</td>
+                  <td>Obračunato danas</td>
+                  <td className="pos">{fmtEUR(accrued)}</td>
                 </tr>
               )}
               {inv.reinvestedFromId && (
@@ -339,12 +309,11 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
 // ─── Kalkulator ─────────────────────────────────────────────────────────────
 
 function KalkulatorSection() {
-  const [principal,  setPrincipal]  = useState('');
-  const [rate,       setRate]       = useState('');
-  const [years,      setYears]      = useState('10');
-  const [annualAdd,  setAnnualAdd]  = useState('');
-  const [applyTax,   setApplyTax]   = useState(true);
-  const [result,     setResult]     = useState(null);
+  const [principal, setPrincipal] = useState('');
+  const [rate,      setRate]      = useState('');
+  const [years,     setYears]     = useState('10');
+  const [annualAdd, setAnnualAdd] = useState('');
+  const [result,    setResult]    = useState(null);
 
   function calculate() {
     const P = parseFloat(principal) || 0;
@@ -359,12 +328,11 @@ function KalkulatorSection() {
     const rows = [];
 
     for (let y = 1; y <= n; y++) {
-      const gross = balance * r;
-      const net   = applyTax ? gross * (1 - TAX_RATE) : gross;
-      balance += net + A;
+      const earned = balance * r;
+      balance += earned + A;
       totalInvested += A;
-      totalEarned   += net;
-      rows.push({ year: y, yearEarned: net, totalInvested, totalEarned, balance });
+      totalEarned   += earned;
+      rows.push({ year: y, yearEarned: earned, totalInvested, totalEarned, balance });
     }
     setResult({ rows, totalInvested, totalEarned, finalBalance: balance });
   }
@@ -399,18 +367,12 @@ function KalkulatorSection() {
         </div>
       </div>
 
-      <label className="inv-calc-tax-label">
-        <input type="checkbox" checked={applyTax} onChange={e => setApplyTax(e.target.checked)} />
-        Uračunaj porez na prihod (10%)
-      </label>
-
       <button className="btn" style={{ width: '100%', marginTop: '12px' }} onClick={calculate}>
         Izračunaj
       </button>
 
       {result && (
         <>
-          {/* Sažetak */}
           <div className="inv-summary-cards" style={{ marginTop: '20px' }}>
             <div className="card inv-stat-card">
               <div className="inv-stat-label">Ukupno uloženo</div>
@@ -426,7 +388,6 @@ function KalkulatorSection() {
             </div>
           </div>
 
-          {/* Stupičasti grafikon */}
           <div className="inv-chart-scroll">
             <div className="inv-chart">
               {result.rows.map(row => {
@@ -437,7 +398,6 @@ function KalkulatorSection() {
                     title={`Godina ${row.year}\nUloženo: ${fmtEUR(row.totalInvested)}\nZarada: ${fmtEUR(row.totalEarned)}\nUkupno: ${fmtEUR(row.balance)}`}
                   >
                     <div className="inv-bar-col" style={{ height: CHART_H + 'px' }}>
-                      {/* redosljed: earned prvi → iznad; invested drugi → ispod */}
                       <div className="inv-bar inv-bar-earned"   style={{ height: earH + 'px' }} />
                       <div className="inv-bar inv-bar-invested" style={{ height: invH + 'px' }} />
                     </div>
@@ -452,7 +412,6 @@ function KalkulatorSection() {
             <span className="inv-legend-dot dot-earned"   /> Zarada
           </div>
 
-          {/* Tablica po godinama */}
           <div className="table-wrap" style={{ marginTop: '16px' }}>
             <table id="kalkulatorTable">
               <thead>
@@ -488,38 +447,36 @@ function KalkulatorSection() {
 export default function TrezorPage() {
   const { state, updateState } = useApp();
   const investments = state.investments || [];
-  const [showAdd,       setShowAdd]       = useState(false);
+  const [showAdd,        setShowAdd]        = useState(false);
   const [reinvestPrefil, setReinvestPrefil] = useState(null);
-  const [tab,           setTab]           = useState('portfelj');
+  const [tab,            setTab]            = useState('portfelj');
 
   const t = todayStr();
 
-  // Obogati svako ulaganje izračunatim vrijednostima
   const enriched = investments.map(inv => {
     const daysRem   = daysBetween(t, inv.maturityDate);
     const isExpired = daysRem <= 0 && inv.status === 'active';
-    const netM      = netInterest(inv.amount, inv.rate, inv.days);
-    return { ...inv, daysRem, isExpired, netM };
+    const interest  = calcInterest(inv.amount, inv.rate, inv.days);
+    return { ...inv, daysRem, isExpired, interest };
   });
 
-  // Sažetak
   const active           = enriched.filter(i => i.status === 'active');
   const doneItems        = enriched.filter(i => i.status === 'matured' || i.status === 'reinvested');
   const totalActive      = active.reduce((s, i) => s + i.amount, 0);
-  const totalNetHistoric = doneItems.reduce((s, i) => s + i.netM, 0);
-  const totalNetAccrued  = active.reduce((s, i) => s + accruedGross(i) * (1 - TAX_RATE), 0);
-  const totalNetEarned   = totalNetHistoric + totalNetAccrued;
+  const totalEarnedDone  = doneItems.reduce((s, i) => s + i.interest, 0);
+  const totalAccrued     = active.reduce((s, i) => s + calcAccrued(i), 0);
+  const totalEarned      = totalEarnedDone + totalAccrued;
 
-  const nextMaturity     = active
+  const nextMaturity = active
     .filter(i => i.daysRem > 0)
     .sort((a, b) => a.daysRem - b.daysRem)[0];
 
   const expiredCount = active.filter(i => i.isExpired).length;
 
   function handleReinvest(inv) {
-    const netM = netInterest(inv.amount, inv.rate, inv.days);
+    const interest = calcInterest(inv.amount, inv.rate, inv.days);
     setReinvestPrefil({
-      amount: (inv.amount + netM).toFixed(2),
+      amount: (inv.amount + interest).toFixed(2),
       rate: inv.rate,
       days: inv.days,
       date: t,
@@ -529,8 +486,7 @@ export default function TrezorPage() {
 
   function handleMarkMatured(inv) {
     if (!confirm('Označiti ovo ulaganje kao naplaćeno (bez reinvestiranja)?')) return;
-    const ns = { ...state, investments: state.investments.map(i => i.id === inv.id ? { ...i, status: 'matured' } : i) };
-    updateState(ns);
+    updateState({ ...state, investments: state.investments.map(i => i.id === inv.id ? { ...i, status: 'matured' } : i) });
   }
 
   function handleDelete(id) {
@@ -541,7 +497,6 @@ export default function TrezorPage() {
   return (
     <section>
 
-      {/* ── Sažetak ── */}
       <div className="card">
         <div className="card-title">
           <h2>📈 Trezorski zapisi</h2>
@@ -560,8 +515,8 @@ export default function TrezorPage() {
             <div className="inv-stat-value">{fmtEUR(totalActive)}</div>
           </div>
           <div className="card inv-stat-card">
-            <div className="inv-stat-label">Ukupna zarada (neto)</div>
-            <div className="inv-stat-value pos">{fmtEUR(totalNetEarned)}</div>
+            <div className="inv-stat-label">Ukupna zarada</div>
+            <div className="inv-stat-value pos">{fmtEUR(totalEarned)}</div>
           </div>
           <div className="card inv-stat-card">
             <div className="inv-stat-label">Sljedeće dospijeće</div>
@@ -574,13 +529,11 @@ export default function TrezorPage() {
         </div>
       </div>
 
-      {/* ── Tabovi ── */}
       <div className={'type-toggle income'} style={{ margin: '0 0 12px' }}>
         <button className={tab === 'portfelj'   ? 'active' : ''} onClick={() => setTab('portfelj')}>Portfelj</button>
         <button className={tab === 'kalkulator' ? 'active' : ''} onClick={() => setTab('kalkulator')}>Kalkulator</button>
       </div>
 
-      {/* ── Portfelj ── */}
       {tab === 'portfelj' && (
         <div className="card">
           <div className="card-title"><h2>Ulaganja</h2></div>
@@ -607,11 +560,9 @@ export default function TrezorPage() {
         </div>
       )}
 
-      {/* ── Kalkulator ── */}
       {tab === 'kalkulator' && <KalkulatorSection />}
 
-      {/* ── Modali ── */}
-      {showAdd       && <AddModal onClose={() => setShowAdd(false)} />}
+      {showAdd        && <AddModal onClose={() => setShowAdd(false)} />}
       {reinvestPrefil && <AddModal prefill={reinvestPrefil} onClose={() => setReinvestPrefil(null)} />}
     </section>
   );
