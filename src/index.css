@@ -1209,6 +1209,24 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .inv-earned-label { font-size: 0.78rem; color: #64748b; }
 .inv-earned-value { font-size: 1rem; font-weight: 700; }
 
+/* Dashboard investments widget */
+.inv-dash-split {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 14px;
+  flex-wrap: wrap;
+}
+.inv-dash-item  { flex: 1; min-width: 80px; text-align: center; }
+.inv-dash-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+.inv-dash-val   { font-size: 1rem; font-weight: 700; color: #0f172a; margin-top: 2px; }
+.inv-dash-sep   { color: #cbd5e1; font-size: 1rem; flex-shrink: 0; }
+.inv-dash-maturities { border-top: 1px solid #f1f5f9; padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.inv-dash-row   { display: flex; justify-content: space-between; align-items: center; font-size: 0.84rem; }
+.inv-dash-name  { font-weight: 600; color: #0f172a; }
+.inv-dash-days  { font-size: 0.76rem; color: #64748b; }
+.inv-dash-expired .inv-dash-days { color: #d97706; font-weight: 600; }
+
 /* Preview box u modalu */
 .inv-preview-box {
   background: #f0fdf4;

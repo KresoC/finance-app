@@ -763,12 +763,66 @@ function DashCategoryTable({ state }) {
   );
 }
 
+function InvestmentsWidget({ state }) {
+  const active = (state.investments || []).filter(i => i.status === 'active');
+  if (active.length === 0) return null;
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const daysRem = d => Math.round((new Date(d) - today) / 86400000);
+  const fmtD = s => { const [y,m,d] = s.split('-'); return `${d}.${m}.${y}.`; };
+
+  const locked = active.reduce((s, i) => s + i.amount, 0);
+  const free   = currentBalance(state) - locked;
+
+  const upcoming = [...active]
+    .map(i => ({ ...i, dr: daysRem(i.maturityDate) }))
+    .sort((a, b) => a.dr - b.dr);
+
+  return (
+    <div className="card inv-dash-card">
+      <div className="card-title"><h2>📈 Trezorski zapisi</h2></div>
+      <div className="inv-dash-split">
+        <div className="inv-dash-item">
+          <div className="inv-dash-label">Zaključano</div>
+          <div className="inv-dash-val">{fmtEUR(locked)}</div>
+        </div>
+        <span className="inv-dash-sep">+</span>
+        <div className="inv-dash-item">
+          <div className="inv-dash-label">Slobodna gotovina</div>
+          <div className={'inv-dash-val ' + (free >= 0 ? 'pos' : 'neg')}>{fmtEUR(free)}</div>
+        </div>
+        <span className="inv-dash-sep">=</span>
+        <div className="inv-dash-item">
+          <div className="inv-dash-label">Ukupno stanje</div>
+          <div className="inv-dash-val">{fmtEUR(currentBalance(state))}</div>
+        </div>
+      </div>
+      <div className="inv-dash-maturities">
+        {upcoming.map(inv => {
+          const expired = inv.dr <= 0;
+          const fv = inv.faceValue || inv.amount;
+          return (
+            <div key={inv.id} className={'inv-dash-row' + (expired ? ' inv-dash-expired' : '')}>
+              <span className="inv-dash-name">{fmtEUR(fv)}</span>
+              <span className="inv-dash-days">
+                {expired ? '⏰ Dospjelo — idi na Ulaganja' : `za ${inv.dr} d · ${fmtD(inv.maturityDate)}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { state } = useApp();
   return (
     <section>
       <HeroCard state={state} />
       <StatGrid state={state} />
+      <InvestmentsWidget state={state} />
       <LiveTracking state={state} />
       <MonthlyStatus state={state} />
       <InsightsCard state={state} />
