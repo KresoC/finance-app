@@ -33,15 +33,36 @@ function fmtPct(v) {
   return Number(v).toLocaleString('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 }
 
-// Fizičke osobe ne plaćaju porez na trezorske zapise RH — prinos = bruto = neto
-function calcInterest(amount, rate, days) {
-  return amount * (rate / 100) * (days / 365);
+function fmtEUR2(v) {
+  // Prikazuje 2 decimale za cijenu kupnje
+  return new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + ' EUR';
+}
+
+// Trezorski zapis — diskontni instrument
+// Cijena kupnje = nominalna vrijednost / (1 + prinos × dani/365)
+function calcPurchasePrice(faceValue, rate, days) {
+  return faceValue / (1 + (rate / 100) * (days / 365));
+}
+
+// Prinos = nominalna - cijena kupnje
+// Backward compat: stari zapisi (bez faceValue) koristili su amount × rate × days/365
+function calcInterest(inv) {
+  if (inv.faceValue) return inv.faceValue - inv.amount;           // novi format
+  return inv.amount * (inv.rate / 100) * (inv.days / 365);       // stari format
+}
+
+function calcMaturityValue(inv) {
+  return inv.faceValue ?? (inv.amount + calcInterest(inv));
 }
 
 function calcAccrued(inv) {
   const t = todayStr();
   const elapsed = Math.max(0, Math.min(daysBetween(inv.date, t), inv.days));
-  return calcInterest(inv.amount, inv.rate, elapsed);
+  if (inv.faceValue) {
+    // Prinos se linerarno obračunava od kupnje do dospijeća
+    return (inv.faceValue - inv.amount) * (elapsed / inv.days);
+  }
+  return inv.amount * (inv.rate / 100) * (elapsed / 365);
 }
 
 // ─── AddModal ───────────────────────────────────────────────────────────────
@@ -50,30 +71,36 @@ function AddModal({ prefill, onClose }) {
   const { state, updateState } = useApp();
   const isReinvest = !!prefill?.reinvestedFromId;
 
-  const [amount,      setAmount]      = useState('');
-  const [extraAmount, setExtraAmount] = useState('');
-  const [rate,        setRate]        = useState(prefill?.rate ? String(prefill.rate) : '');
-  const [date,        setDate]        = useState(prefill?.date || todayStr());
-  const [days,        setDays]        = useState(String(prefill?.days || 364));
-  const [notes,       setNotes]       = useState('');
+  // Unosi se nominalna vrijednost (ono što dobiješ na dospijeće)
+  const [faceValue, setFaceValue] = useState(prefill?.faceValue ? String(prefill.faceValue) : '');
+  const [rate,      setRate]      = useState(prefill?.rate ? String(prefill.rate) : '');
+  const [date,      setDate]      = useState(prefill?.date || todayStr());
+  const [days,      setDays]      = useState(String(prefill?.days || 364));
+  const [notes,     setNotes]     = useState('');
 
-  const baseAmount  = prefill?.amount ? parseFloat(prefill.amount) : 0;
-  const extraParsed = parseFloat(extraAmount) || 0;
-  const totalAmount = isReinvest
-    ? baseAmount + extraParsed
-    : (parseFloat(amount) || 0);
-
-  const daysNum      = parseInt(days) || 364;
-  const rateNum      = parseFloat(rate) || 0;
+  const faceNum     = parseFloat(faceValue) || 0;
+  const rateNum     = parseFloat(rate) || 0;
+  const daysNum     = parseInt(days) || 364;
+  const billCount   = faceNum >= 1000 ? Math.floor(faceNum / 1000) : 0;
   const maturityDate = date ? addDays(date, daysNum) : '';
-  const previewInt   = totalAmount && rateNum ? calcInterest(totalAmount, rateNum, daysNum) : null;
+
+  // Izračun cijene kupnje
+  const purchasePrice = (faceNum && rateNum && daysNum)
+    ? calcPurchasePrice(faceNum, rateNum, daysNum)
+    : null;
+  const interest = purchasePrice !== null ? faceNum - purchasePrice : null;
+
+  // Za reinvest: koliko je na raspolaganju iz dospijeća
+  const availableFromMaturity = prefill?.availableAmount || 0;
 
   function save() {
-    if (!totalAmount || !rateNum || !date || !daysNum) return;
+    if (!faceNum || !rateNum || !date || !daysNum) return;
+    const pp = calcPurchasePrice(faceNum, rateNum, daysNum);
     const newInv = {
       id: uid(),
       date,
-      amount: totalAmount,
+      amount: pp,           // cijena kupnje (stvarno uplaćeni iznos)
+      faceValue: faceNum,   // nominalna vrijednost (što dobiješ na dospijeće)
       rate: rateNum,
       days: daysNum,
       maturityDate: addDays(date, daysNum),
@@ -101,39 +128,35 @@ function AddModal({ prefill, onClose }) {
         </div>
         <div className="fill-modal-body">
 
-          {isReinvest && (
+          {/* Reinvest: podsjetnik koliko dolazi s dospijeća */}
+          {isReinvest && availableFromMaturity > 0 && (
             <div className="inv-reinvest-banner">
-              <div className="inv-reinvest-meta">Iznos po dospijeću</div>
-              <div className="inv-reinvest-val">{fmtEUR(baseAmount)}</div>
-              <label className="inv-field-label" style={{ marginTop: '10px' }}>Dodaj još novaca (opcija, EUR)</label>
-              <input
-                type="number"
-                className="inv-input"
-                placeholder="0"
-                value={extraAmount}
-                onChange={e => setExtraAmount(e.target.value)}
-                min="0"
-              />
-              {extraParsed > 0 && (
-                <div className="inv-total-label">
-                  Ukupno za ulaganje: <b>{fmtEUR(totalAmount)}</b>
-                </div>
-              )}
+              <div className="inv-reinvest-meta">Na raspolaganju iz prethodnog dospijeća</div>
+              <div className="inv-reinvest-val">{fmtEUR(availableFromMaturity)}</div>
+              <div className="inv-reinvest-hint">
+                Unesi nominalnu vrijednost novog ulaganja u polje ispod. Možeš zadržati isti iznos ili ga povećati.
+              </div>
             </div>
           )}
 
-          {!isReinvest && (
-            <>
-              <label className="inv-field-label">Iznos (EUR)</label>
-              <input
-                type="number"
-                className="inv-input"
-                placeholder="10.000"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                min="0"
-              />
-            </>
+          {/* Nominalna vrijednost */}
+          <label className="inv-field-label">
+            Nominalna vrijednost (EUR)
+            <span className="inv-field-hint"> — što ćeš dobiti na dospijeće</span>
+          </label>
+          <input
+            type="number"
+            className="inv-input"
+            placeholder="npr. 23.000"
+            value={faceValue}
+            onChange={e => setFaceValue(e.target.value)}
+            min="1000"
+            step="1000"
+          />
+          {billCount > 0 && (
+            <div className="inv-bill-count">
+              {billCount} {billCount === 1 ? 'zapis' : billCount < 5 ? 'zapisa' : 'zapisa'} × 1.000 EUR
+            </div>
           )}
 
           <label className="inv-field-label">Godišnji prinos (%)</label>
@@ -186,22 +209,33 @@ function AddModal({ prefill, onClose }) {
             onChange={e => setNotes(e.target.value)}
           />
 
-          {previewInt !== null && (
+          {/* Live preview */}
+          {purchasePrice !== null && (
             <div className="inv-preview-box">
               <div className="inv-preview-row">
-                <span>Prinos</span>
-                <span className="pos">{fmtEUR(previewInt)}</span>
+                <span>Plaćaš (cijena kupnje)</span>
+                <span className="inv-preview-pay">{fmtEUR2(purchasePrice)}</span>
+              </div>
+              <div className="inv-preview-row">
+                <span>Prinos (zarada)</span>
+                <span className="pos">{fmtEUR2(interest)}</span>
               </div>
               <div className="inv-preview-row inv-preview-neto">
-                <span><b>Vrijednost po dospijeću</b></span>
-                <b>{fmtEUR(totalAmount + previewInt)}</b>
+                <span><b>Primiš na dospijeće</b></span>
+                <b>{fmtEUR(faceNum)}</b>
               </div>
+              {isReinvest && availableFromMaturity > 0 && (
+                <div className={'inv-preview-row inv-preview-diff ' + (purchasePrice <= availableFromMaturity ? 'pos' : 'neg')}>
+                  <span>{purchasePrice <= availableFromMaturity ? 'Ostaje ti' : 'Trebate dodati'}</span>
+                  <span>{fmtEUR2(Math.abs(availableFromMaturity - purchasePrice))}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
         <div className="fill-modal-footer">
           <button className="btn ghost" onClick={onClose}>Odustani</button>
-          <button className="btn" onClick={save} disabled={!totalAmount || !rateNum || !date}>
+          <button className="btn" onClick={save} disabled={!faceNum || !rateNum || !date}>
             {isReinvest ? 'Reinvestiraj' : 'Dodaj ulaganje'}
           </button>
         </div>
@@ -216,10 +250,12 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
   const [open, setOpen] = useState(false);
   const t = todayStr();
 
-  const daysRem   = daysBetween(t, inv.maturityDate);
-  const isExpired = daysRem <= 0 && inv.status === 'active';
-  const interest  = calcInterest(inv.amount, inv.rate, inv.days);
-  const accrued   = calcAccrued(inv);
+  const daysRem      = daysBetween(t, inv.maturityDate);
+  const isExpired    = daysRem <= 0 && inv.status === 'active';
+  const interest     = calcInterest(inv);
+  const maturityVal  = calcMaturityValue(inv);
+  const accrued      = calcAccrued(inv);
+  const hasFaceValue = !!inv.faceValue; // novi format
 
   const statusLabel = inv.status === 'reinvested' ? '↩ Reinvestirano'
                     : inv.status === 'matured'     ? '✅ Naplaćeno'
@@ -234,11 +270,25 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
     <div className={cardCls}>
       <div className="inv-card-summary" onClick={() => setOpen(o => !o)}>
         <div className="inv-card-left">
-          <div className="inv-card-amount">{fmtEUR(inv.amount)}</div>
-          <div className="inv-card-meta">
-            {fmtPct(inv.rate)} · {inv.days} dana · {fmtDate(inv.date)}
-            {inv.notes && <span className="inv-card-note"> · {inv.notes}</span>}
-          </div>
+          {hasFaceValue ? (
+            // Novi format: prikaži nominalnu vrijednost kao glavni iznos
+            <>
+              <div className="inv-card-amount">{fmtEUR(inv.faceValue)}</div>
+              <div className="inv-card-meta">
+                nominalna · {fmtPct(inv.rate)} · {inv.days} dana · {fmtDate(inv.date)}
+                {inv.notes && <span className="inv-card-note"> · {inv.notes}</span>}
+              </div>
+            </>
+          ) : (
+            // Stari format
+            <>
+              <div className="inv-card-amount">{fmtEUR(inv.amount)}</div>
+              <div className="inv-card-meta">
+                {fmtPct(inv.rate)} · {inv.days} dana · {fmtDate(inv.date)}
+                {inv.notes && <span className="inv-card-note"> · {inv.notes}</span>}
+              </div>
+            </>
+          )}
         </div>
         <div className="inv-card-right">
           <div className={'inv-status-badge inv-status-' + (isExpired ? 'expired' : inv.status)}>
@@ -265,24 +315,30 @@ function InvCard({ inv, onReinvest, onMarkMatured, onDelete }) {
                 <td>Datum dospijeća</td>
                 <td><b>{fmtDate(inv.maturityDate)}</b></td>
               </tr>
+              {hasFaceValue && (
+                <tr>
+                  <td>Nominalna vrijednost</td>
+                  <td><b>{fmtEUR(inv.faceValue)}</b></td>
+                </tr>
+              )}
+              {hasFaceValue && (
+                <tr>
+                  <td>Cijena kupnje (plaćeno)</td>
+                  <td>{fmtEUR2(inv.amount)}</td>
+                </tr>
+              )}
               <tr>
                 <td>Prinos</td>
-                <td className="pos">{fmtEUR(interest)}</td>
+                <td className="pos"><b>{fmtEUR2(interest)}</b></td>
               </tr>
               <tr className="inv-detail-total">
-                <td><b>Vrijednost po dospijeću</b></td>
-                <td><b>{fmtEUR(inv.amount + interest)}</b></td>
+                <td><b>Primiš na dospijeće</b></td>
+                <td><b>{fmtEUR(maturityVal)}</b></td>
               </tr>
               {inv.status === 'active' && !isExpired && (
                 <tr>
                   <td>Obračunato danas</td>
-                  <td className="pos">{fmtEUR(accrued)}</td>
-                </tr>
-              )}
-              {inv.reinvestedFromId && (
-                <tr>
-                  <td>Reinvestirano od</td>
-                  <td className="muted" style={{ fontSize: '0.75rem' }}>{inv.reinvestedFromId}</td>
+                  <td className="pos">{fmtEUR2(accrued)}</td>
                 </tr>
               )}
             </tbody>
@@ -456,16 +512,22 @@ export default function TrezorPage() {
   const enriched = investments.map(inv => {
     const daysRem   = daysBetween(t, inv.maturityDate);
     const isExpired = daysRem <= 0 && inv.status === 'active';
-    const interest  = calcInterest(inv.amount, inv.rate, inv.days);
-    return { ...inv, daysRem, isExpired, interest };
+    const interest  = calcInterest(inv);
+    const matVal    = calcMaturityValue(inv);
+    return { ...inv, daysRem, isExpired, interest, matVal };
   });
 
-  const active           = enriched.filter(i => i.status === 'active');
-  const doneItems        = enriched.filter(i => i.status === 'matured' || i.status === 'reinvested');
-  const totalActive      = active.reduce((s, i) => s + i.amount, 0);
-  const totalEarnedDone  = doneItems.reduce((s, i) => s + i.interest, 0);
-  const totalAccrued     = active.reduce((s, i) => s + calcAccrued(i), 0);
-  const totalEarned      = totalEarnedDone + totalAccrued;
+  const active          = enriched.filter(i => i.status === 'active');
+  const doneItems       = enriched.filter(i => i.status === 'matured' || i.status === 'reinvested');
+
+  // "Aktivno uloženo" = cijena kupnje (što je stvarno plaćeno)
+  const totalPaid       = active.reduce((s, i) => s + i.amount, 0);
+  // Nominalna vrijednost aktivnog portfelja
+  const totalFaceValue  = active.reduce((s, i) => s + i.matVal, 0);
+  // Zarada: ostvarena na završenim + obračunata danas na aktivnim
+  const totalEarnedDone = doneItems.reduce((s, i) => s + i.interest, 0);
+  const totalAccrued    = active.reduce((s, i) => s + calcAccrued(i), 0);
+  const totalEarned     = totalEarnedDone + totalAccrued;
 
   const nextMaturity = active
     .filter(i => i.daysRem > 0)
@@ -474,9 +536,11 @@ export default function TrezorPage() {
   const expiredCount = active.filter(i => i.isExpired).length;
 
   function handleReinvest(inv) {
-    const interest = calcInterest(inv.amount, inv.rate, inv.days);
+    // Pre-fill s nominalnom vrijednošću (što dolazi na dospijeće)
+    const matVal = calcMaturityValue(inv);
     setReinvestPrefil({
-      amount: (inv.amount + interest).toFixed(2),
+      faceValue: String(Math.round(matVal)),
+      availableAmount: matVal,
       rate: inv.rate,
       days: inv.days,
       date: t,
@@ -511,12 +575,12 @@ export default function TrezorPage() {
 
         <div className="inv-summary-cards">
           <div className="card inv-stat-card">
-            <div className="inv-stat-label">Aktivno uloženo</div>
-            <div className="inv-stat-value">{fmtEUR(totalActive)}</div>
+            <div className="inv-stat-label">Plaćeno (cijena kupnje)</div>
+            <div className="inv-stat-value">{fmtEUR(totalPaid)}</div>
           </div>
           <div className="card inv-stat-card">
-            <div className="inv-stat-label">Ukupna zarada</div>
-            <div className="inv-stat-value pos">{fmtEUR(totalEarned)}</div>
+            <div className="inv-stat-label">Nominalna vrijednost</div>
+            <div className="inv-stat-value">{fmtEUR(totalFaceValue)}</div>
           </div>
           <div className="card inv-stat-card">
             <div className="inv-stat-label">Sljedeće dospijeće</div>
@@ -527,6 +591,14 @@ export default function TrezorPage() {
             </div>
           </div>
         </div>
+
+        {/* Ukupna zarada — ispod kartica */}
+        {totalEarned > 0 && (
+          <div className="inv-earned-row">
+            <span className="inv-earned-label">Ukupna zarada (ostvarena + obračunata)</span>
+            <span className="inv-earned-value pos">{fmtEUR(totalEarned)}</span>
+          </div>
+        )}
       </div>
 
       <div className={'type-toggle income'} style={{ margin: '0 0 12px' }}>

@@ -1193,6 +1193,21 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .inv-reinvest-meta { font-size: 0.72rem; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px; }
 .inv-reinvest-val  { font-size: 1.2rem; font-weight: 700; color: #1e40af; margin-top: 2px; }
 .inv-total-label   { font-size: 0.82rem; color: #374151; margin-top: 8px; }
+.inv-reinvest-hint { font-size: 0.78rem; color: #3b82f6; margin-top: 6px; line-height: 1.4; }
+.inv-field-hint    { font-size: 0.73rem; color: #94a3b8; font-weight: 400; margin-left: 4px; }
+.inv-bill-count    { font-size: 0.78rem; color: #6366f1; font-weight: 600; margin-top: 4px; }
+.inv-preview-pay   { color: #0f172a; font-weight: 600; }
+.inv-preview-diff  { border-top: 1px solid #bbf7d0; padding-top: 6px; margin-top: 4px; }
+.inv-earned-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+.inv-earned-label { font-size: 0.78rem; color: #64748b; }
+.inv-earned-value { font-size: 1rem; font-weight: 700; }
 
 /* Preview box u modalu */
 .inv-preview-box {
