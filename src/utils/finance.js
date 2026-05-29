@@ -237,3 +237,62 @@ export function escapeHtml(s) {
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
   ));
 }
+
+// Kao projectionYearEnd, ali za buduće godine koristi live projekciju prethodne
+// godine kao početno stanje (umjesto statičkog initialBalance).
+// Npr. na 2027 viewu — početno stanje = live projectionYearEnd(2026 state).
+export function chainedProjectionYearEnd(state) {
+  const prevYear = state.year - 1;
+  const prevData = state.yearsData?.[prevYear];
+  if (!prevData?.plan) return projectionYearEnd(state); // nema prethodne godine — koristi standard
+
+  const prevState = {
+    ...state,
+    year: prevYear,
+    initialBalance: prevData.initialBalance ?? 0,
+    startDate: prevData.startDate ?? (prevYear + '-01-01'),
+    plan: prevData.plan ?? {},
+    actual: prevData.actual ?? {},
+    groupPlan: prevData.groupPlan ?? {},
+    useGroupPlan: prevData.useGroupPlan ?? {},
+  };
+
+  const chainedStart = projectionYearEnd(prevState);
+  return projectionYearEnd({ ...state, initialBalance: chainedStart });
+}
+
+// Generira plan za novu godinu na temelju actuals prethodne godine.
+// categories = state.categories ({ income: [...], expense: [...] })
+// prevYearData = state.yearsData[prevYear] ({ actual: {...}, plan: {...} })
+export function generatePlanFromActuals(categories, prevYearData) {
+  if (!prevYearData?.actual) return {};
+  const actual = prevYearData.actual;
+  const prevPlan = prevYearData.plan || {};
+  const newPlan = {};
+
+  [...(categories.income || []), ...(categories.expense || [])].forEach(c => {
+    const actArr = actual[c.id];
+    if (!actArr) return;
+    const nonZero = actArr.filter(v => v > 0);
+    if (nonZero.length === 0) return;
+
+    const avg = Math.round(nonZero.reduce((s, v) => s + v, 0) / nonZero.length);
+    const isPlaca = /pla[cć]a/i.test(c.name);
+
+    if (isPlaca) {
+      // Plaća: flat iznos (zadnja vrijednost) za sve aktivne mjesece
+      const lastVal = nonZero[nonZero.length - 1];
+      const planArr = prevPlan[c.id] || new Array(12).fill(0);
+      const result = planArr.map((v, i) => (v > 0 || actArr[i] > 0) ? lastVal : 0);
+      newPlan[c.id] = result.some(v => v > 0) ? result : new Array(12).fill(lastVal);
+    } else if (nonZero.length <= 2) {
+      // Jednokratni (bonus, regres, božićnica): kopija exact actuals (isti mjeseci, isti iznos)
+      newPlan[c.id] = actArr.slice();
+    } else {
+      // Redovni troškovi / Režije: per-month iznosi, prazne mjesece popuni prosjekom
+      newPlan[c.id] = actArr.map(v => v > 0 ? v : avg);
+    }
+  });
+
+  return newPlan;
+}

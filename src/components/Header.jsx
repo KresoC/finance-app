@@ -2,7 +2,8 @@ import { useApp, listAvailableYears, snapshotActiveYear, loadYearIntoState, sync
 import { ensurePlanArrays, defaultState } from '../store/state.js';
 import {
   fmtEUR, currentBalance, plannedBalanceToday, projectionYearEnd,
-  plannedEndOfYear, actualNetMonth, plannedNetMonth, currentMonthIdx
+  chainedProjectionYearEnd, plannedEndOfYear, actualNetMonth, plannedNetMonth,
+  currentMonthIdx, generatePlanFromActuals
 } from '../utils/finance.js';
 
 export default function Header({ syncMsg }) {
@@ -11,7 +12,7 @@ export default function Header({ syncMsg }) {
   const cb = currentBalance(state);
   const pt = plannedBalanceToday(state);
   const ptDelta = cb - pt;
-  const proj = projectionYearEnd(state);
+  const proj = chainedProjectionYearEnd(state);
   const projDelta = proj - plannedEndOfYear(state);
 
   const years = listAvailableYears(state);
@@ -61,9 +62,10 @@ export default function Header({ syncMsg }) {
     const snapped = { ...state };
     snapshotActiveYear(snapped);
     const prevData = snapped.yearsData && snapped.yearsData[state.year];
+    const projBalance = Math.round(projectionYearEnd(state));
     let next = {
       ...snapped, year: newYear,
-      initialBalance: 0, startDate: newYear + '-01-01',
+      initialBalance: projBalance, startDate: newYear + '-01-01',
       actual: {}, yearGoal: 0, recentEntries: [],
       groupPlan: JSON.parse(JSON.stringify((prevData && prevData.groupPlan) || {})),
       useGroupPlan: JSON.parse(JSON.stringify((prevData && prevData.useGroupPlan) || {}))
@@ -73,30 +75,10 @@ export default function Header({ syncMsg }) {
     } else if (mode.trim() === '2') {
       next.plan = JSON.parse(JSON.stringify((prevData && prevData.plan) || {}));
     } else if (mode.trim() === '3') {
-      next.plan = generatePlanFromActuals(state, prevData);
+      next.plan = generatePlanFromActuals(state.categories, prevData);
     } else { alert('Neispravan izbor'); return; }
     ensurePlanArrays(next);
     updateState(next);
-  }
-
-  function generatePlanFromActuals(state, prevYearData) {
-    if (!prevYearData || !prevYearData.actual) return {};
-    const newPlan = {};
-    const recurringKw = ['placa','plaća','plaću','placu','netflix','internet','kredit','pretplat','struja','voda','plin','hrt','rtv','pricuva','pričuva','komunalna','smece','smeće','redovni'];
-    [...(state.categories.income || []), ...(state.categories.expense || [])].forEach(c => {
-      const actArr = prevYearData.actual[c.id];
-      if (!actArr) return;
-      const monthsWithVal = actArr.filter(v => v > 0).length;
-      const isRecurring = recurringKw.some(kw => c.name.toLowerCase().includes(kw));
-      if (isRecurring || monthsWithVal >= 6) {
-        newPlan[c.id] = actArr.slice();
-      } else if (monthsWithVal >= 3) {
-        const total = actArr.reduce((s, v) => s + v, 0);
-        const avg = total / monthsWithVal;
-        newPlan[c.id] = actArr.map(v => v > 0 ? Math.round(avg) : 0);
-      }
-    });
-    return newPlan;
   }
 
   return (

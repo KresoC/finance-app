@@ -1329,3 +1329,54 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 }
 .dot-invested { background: #6366f1; }
 .dot-earned   { background: #10b981; }
+
+/* ── NextYearForecastCard ────────────────────────────────────────────────── */
+.ny-card {
+  border-left: 4px solid #7c3aed;
+}
+.ny-big-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #7c3aed;
+  margin: 6px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.ny-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+.ny-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.86rem;
+}
+.ny-row span:first-child { color: #374151; }
+.ny-row span:last-child  { font-variant-numeric: tabular-nums; font-weight: 500; }
+.ny-net-row {
+  font-weight: 700;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.ny-net-row span:first-child { color: #0f172a; font-weight: 700; }
+.ny-card-empty { border-left: 4px solid #a78bfa; }
+.ny-empty-text { color: #374151; font-size: 0.9rem; margin-bottom: 6px; }
+.ny-empty-sub  { color: #64748b; font-size: 0.82rem; }
+
+/* ── SuggestPlanBanner ───────────────────────────────────────────────────── */
+.suggest-plan-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+.spb-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.spb-title  { font-weight: 600; font-size: 0.95rem; color: #065f46; }
+.spb-sub    { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }

@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import {
-  fmtEUR, currentMonthIdx, currentBalance, projectionYearEnd, plannedEndOfYear,
-  plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth, actualExpenseMonth,
-  plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
+  fmtEUR, currentMonthIdx, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
+  plannedEndOfYear, plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth,
+  actualExpenseMonth, plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
   startMonthIdx, startIsThisYear, isPlacaCat, MONTHS_HR, MONTHS_LONG
 } from '../utils/finance.js';
 
 function HeroCard({ state }) {
-  const proj = projectionYearEnd(state);
+  const proj = chainedProjectionYearEnd(state);
   const goal = plannedEndOfYear(state);
   const dev = proj - goal;
   let statusCls = '';
@@ -17,11 +17,18 @@ function HeroCard({ state }) {
   else if (dev > 0) { statusText = '+' + fmtEUR(dev) + ' iznad cilja'; statusCls = 'good'; }
   else { statusText = fmtEUR(dev) + ' ispod cilja'; statusCls = 'bad'; }
 
+  // Provjeri je li prethodna godina ulančana u forecast
+  const prevYear = state.year - 1;
+  const isChained = !!(state.yearsData?.[prevYear]?.plan);
+  const subText = isChained
+    ? `uključuje forecast ${prevYear} kao polazište`
+    : 'na temelju trenutnog stanja i preostalog plana';
+
   return (
     <div className="card hero-card">
       <div className="hero-label">Procjena stanja 31.12.{state.year}</div>
       <div className="hero-value">{fmtEUR(proj)}</div>
-      <div className="hero-sub">na temelju trenutnog stanja i preostalog plana</div>
+      <div className="hero-sub">{subText}</div>
       <div><span className={'hero-status ' + statusCls}>{statusText}</span></div>
     </div>
   );
@@ -30,7 +37,7 @@ function HeroCard({ state }) {
 function StatGrid({ state }) {
   const cm = currentMonthIdx(state);
   const cb = currentBalance(state);
-  const proj = projectionYearEnd(state);
+  const proj = chainedProjectionYearEnd(state);
   const goal = plannedEndOfYear(state);
   const dev = proj - goal;
 
@@ -247,7 +254,7 @@ function InsightsCard({ state }) {
   const fromM = startIsThisYear(state) ? sm : 0;
   const insights = [];
 
-  const proj = projectionYearEnd(state);
+  const proj = chainedProjectionYearEnd(state);
   const goal = plannedEndOfYear(state);
   const gd = proj - goal;
   if (Math.abs(gd) < 50) insights.push({ cls: 'good', icon: '🟢', text: 'Forecast tocno na godisnjem cilju (' + fmtEUR(proj) + ')' });
@@ -763,6 +770,86 @@ function DashCategoryTable({ state }) {
   );
 }
 
+function NextYearForecastCard({ state }) {
+  const nextYear = state.year + 1;
+  const nextData = state.yearsData?.[nextYear];
+  const endThis  = chainedProjectionYearEnd(state);
+
+  // Nema 2027 — pokaži poziv na kreiranje
+  if (!nextData) {
+    return (
+      <div className="card ny-card ny-card-empty">
+        <div className="card-title">
+          <h2>🔭 Prognoza kraj {nextYear}</h2>
+        </div>
+        <div className="ny-empty-text">
+          Kreiraj plan za {nextYear} da vidiš prognozu dvogodišnjeg perioda.
+        </div>
+        <div className="ny-empty-sub">
+          Projicirani saldo 31.12.{state.year}: <strong>{fmtEUR(Math.round(endThis))}</strong> — to će biti polazna točka za {nextYear}.
+        </div>
+      </div>
+    );
+  }
+
+  const nextPlan = nextData.plan || {};
+  let totalIncome = 0, totalExpense = 0;
+  state.categories.income.forEach(c => {
+    totalIncome += (nextPlan[c.id] || []).reduce((s, v) => s + (v || 0), 0);
+  });
+  state.categories.expense.forEach(c => {
+    totalExpense += (nextPlan[c.id] || []).reduce((s, v) => s + (v || 0), 0);
+  });
+
+  // 2027 postoji ali nema plana
+  if (totalIncome === 0 && totalExpense === 0) {
+    return (
+      <div className="card ny-card ny-card-empty">
+        <div className="card-title">
+          <h2>🔭 Prognoza kraj {nextYear}</h2>
+        </div>
+        <div className="ny-empty-text">
+          Plan za {nextYear} je prazan — unesi prihode i troškove da vidiš prognozu.
+        </div>
+        <div className="ny-empty-sub">
+          Polazna točka: <strong>{fmtEUR(Math.round(endThis))}</strong> (procjena 31.12.{state.year})
+        </div>
+      </div>
+    );
+  }
+
+  const netNext = totalIncome - totalExpense;
+  const endNext = endThis + netNext;
+
+  return (
+    <div className="card ny-card">
+      <div className="card-title">
+        <h2>🔭 Prognoza kraj {nextYear}</h2>
+        <span className="muted">plan {nextYear} + projekcija {state.year}</span>
+      </div>
+      <div className="ny-big-value">{fmtEUR(Math.round(endNext))}</div>
+      <div className="ny-breakdown">
+        <div className="ny-row">
+          <span>Projicirani saldo 31.12.{state.year}</span>
+          <span>{fmtEUR(Math.round(endThis))}</span>
+        </div>
+        <div className="ny-row">
+          <span className="pos">Planirani prihodi {nextYear}</span>
+          <span className="pos">+{fmtEUR(Math.round(totalIncome))}</span>
+        </div>
+        <div className="ny-row">
+          <span className="neg">Planirani troškovi {nextYear}</span>
+          <span className="neg">−{fmtEUR(Math.round(totalExpense))}</span>
+        </div>
+        <div className="ny-row ny-net-row">
+          <span>Neto {nextYear}</span>
+          <span className={netNext >= 0 ? 'pos' : 'neg'}>{netNext >= 0 ? '+' : ''}{fmtEUR(Math.round(netNext))}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InvestmentsWidget({ state }) {
   const active = (state.investments || []).filter(i => i.status === 'active');
   if (active.length === 0) return null;
@@ -818,6 +905,7 @@ export default function DashboardPage() {
     <section>
       <HeroCard state={state} />
       <StatGrid state={state} />
+      <NextYearForecastCard state={state} />
       <InvestmentsWidget state={state} />
       <LiveTracking state={state} />
       <MonthlyStatus state={state} />

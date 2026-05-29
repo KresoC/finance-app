@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import PlanGrid, { PlanSummaryPanel } from '../components/PlanGrid.jsx';
-import { fmtEUR } from '../utils/finance.js';
+import { fmtEUR, generatePlanFromActuals } from '../utils/finance.js';
 import { parseQuickAdd, detectTargetMonths } from '../utils/quickAdd.js';
-import { MONTHS_HR } from '../store/state.js';
+import { MONTHS_HR, ensurePlanArrays } from '../store/state.js';
 
 function QuickAddPlan() {
   const { state, updateState } = useApp();
@@ -45,12 +45,42 @@ function QuickAddPlan() {
   );
 }
 
+function SuggestPlanBanner() {
+  const { state, updateState } = useApp();
+  const prevYear = state.year - 1;
+  const prevData = state.yearsData?.[prevYear];
+  if (!prevData?.actual) return null;
+  const hasActuals = Object.values(prevData.actual).some(arr => arr.some(v => v > 0));
+  if (!hasActuals) return null;
+
+  function suggest() {
+    if (!confirm('Generirati prijedlog plana iz stvarnih podataka ' + prevYear + '?\n\nPlaća → flat iznos, jednokratni (bonus, regres) → isti mjesec isti iznos, režije/redovni → per-month prosjek.\n\nPostojeće vrijednosti plana biti će zamijenjene za kategorije s podacima.')) return;
+    const suggested = generatePlanFromActuals(state.categories, prevData);
+    const newState = { ...state, plan: { ...state.plan, ...suggested } };
+    ensurePlanArrays(newState);
+    updateState(newState);
+  }
+
+  return (
+    <div className="card suggest-plan-banner">
+      <div className="spb-content">
+        <div>
+          <div className="spb-title">💡 Predloži plan iz actuals {prevYear}</div>
+          <div className="spb-sub">Procijeni kategorije na temelju stvarnih troškova prethodne godine</div>
+        </div>
+        <button className="btn small" onClick={suggest}>Predloži</button>
+      </div>
+    </div>
+  );
+}
+
 export default function PlanPage() {
   const { state }   = useApp();
   const [planType, setPlanType] = useState('income');
 
   return (
     <section>
+      <SuggestPlanBanner />
       <QuickAddPlan />
       <div className="plan-page-layout">
         <div className="plan-page-main">
