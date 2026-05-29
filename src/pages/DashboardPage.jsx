@@ -792,14 +792,23 @@ function NextYearForecastCard({ state }) {
     );
   }
 
-  const nextPlan = nextData.plan || {};
+  // Konstruiraj pravi next-year state da plannedIncomeMonth/plannedExpenseMonth
+  // korektno rješavaju useGroupPlan (inače bi duplikali troškove)
+  const nextState = {
+    ...state,
+    year: nextYear,
+    plan:         nextData.plan         || {},
+    actual:       nextData.actual       || {},
+    groupPlan:    nextData.groupPlan    || {},
+    useGroupPlan: nextData.useGroupPlan || {},
+    initialBalance: nextData.initialBalance || 0,
+    startDate: nextData.startDate || (nextYear + '-01-01'),
+  };
   let totalIncome = 0, totalExpense = 0;
-  state.categories.income.forEach(c => {
-    totalIncome += (nextPlan[c.id] || []).reduce((s, v) => s + (v || 0), 0);
-  });
-  state.categories.expense.forEach(c => {
-    totalExpense += (nextPlan[c.id] || []).reduce((s, v) => s + (v || 0), 0);
-  });
+  for (let m = 0; m < 12; m++) {
+    totalIncome  += plannedIncomeMonth(nextState, m);
+    totalExpense += plannedExpenseMonth(nextState, m);
+  }
 
   // 2027 postoji ali nema plana
   if (totalIncome === 0 && totalExpense === 0) {
