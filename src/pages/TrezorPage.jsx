@@ -65,6 +65,30 @@ function calcAccrued(inv) {
   return inv.amount * (inv.rate / 100) * (elapsed / 365);
 }
 
+// ─── Prihod od T-zapisa ─────────────────────────────────────────────────────
+
+const TREZOR_CAT_ID   = 'inc-trezor';
+const TREZOR_CAT_NAME = 'Prihod TZ';
+const MONTHS_SHORT    = ['Sij','Velj','Ožu','Tra','Svi','Lip','Srp','Kol','Ruj','Lis','Stu','Pro'];
+
+function ensureTrezorCat(state) {
+  if (state.categories.income.some(c => c.id === TREZOR_CAT_ID)) return state;
+  const cat = { id: TREZOR_CAT_ID, name: TREZOR_CAT_NAME, months: [0,1,2,3,4,5,6,7,8,9,10,11] };
+  return {
+    ...state,
+    categories: { ...state.categories, income: [...state.categories.income, cat] },
+    plan:   { ...state.plan,   [TREZOR_CAT_ID]: new Array(12).fill(0) },
+    actual: { ...state.actual, [TREZOR_CAT_ID]: new Array(12).fill(0) },
+  };
+}
+
+function recordInterest(state, amount, month) {
+  let ns = ensureTrezorCat(state);
+  const arr = [...(ns.actual[TREZOR_CAT_ID] || new Array(12).fill(0))];
+  arr[month] = (arr[month] || 0) + Math.round(amount);
+  return { ...ns, actual: { ...ns.actual, [TREZOR_CAT_ID]: arr } };
+}
+
 // ─── AddModal ───────────────────────────────────────────────────────────────
 
 function AddModal({ prefill, onClose }) {
@@ -108,11 +132,13 @@ function AddModal({ prefill, onClose }) {
       reinvestedFromId: prefill?.reinvestedFromId || null,
       notes,
     };
-    const newState = { ...state, investments: [...(state.investments || [])] };
+    let newState = { ...state, investments: [...(state.investments || [])] };
     if (prefill?.reinvestedFromId) {
       newState.investments = newState.investments.map(inv =>
         inv.id === prefill.reinvestedFromId ? { ...inv, status: 'reinvested' } : inv
       );
+      if (prefill.interestToRecord > 0)
+        newState = recordInterest(newState, prefill.interestToRecord, prefill.interestMonth);
     }
     newState.investments.push(newInv);
     updateState(newState);
@@ -536,11 +562,13 @@ export default function TrezorPage() {
   const expiredCount = active.filter(i => i.isExpired).length;
 
   function handleReinvest(inv) {
-    // Pre-fill s nominalnom vrijednošću (što dolazi na dospijeće)
     const matVal = calcMaturityValue(inv);
+    const month  = parseInt(inv.maturityDate.split('-')[1]) - 1;
     setReinvestPrefil({
       faceValue: String(Math.round(matVal)),
       availableAmount: matVal,
+      interestToRecord: calcInterest(inv),
+      interestMonth: month,
       rate: inv.rate,
       days: inv.days,
       date: t,
@@ -549,8 +577,12 @@ export default function TrezorPage() {
   }
 
   function handleMarkMatured(inv) {
-    if (!confirm('Označiti ovo ulaganje kao naplaćeno (bez reinvestiranja)?')) return;
-    updateState({ ...state, investments: state.investments.map(i => i.id === inv.id ? { ...i, status: 'matured' } : i) });
+    const interest = calcInterest(inv);
+    const month    = parseInt(inv.maturityDate.split('-')[1]) - 1;
+    if (!confirm(`Označiti kao naplaćeno?\n\nZarada ${fmtEUR(Math.round(interest))} bit će evidentirana kao prihod (${MONTHS_SHORT[month]}) u kategoriji "${TREZOR_CAT_NAME}".`)) return;
+    let ns = { ...state, investments: state.investments.map(i => i.id === inv.id ? { ...i, status: 'matured' } : i) };
+    ns = recordInterest(ns, interest, month);
+    updateState(ns);
   }
 
   function handleDelete(id) {
