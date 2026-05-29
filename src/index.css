@@ -1226,6 +1226,19 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .inv-dash-name  { font-weight: 600; color: #0f172a; }
 .inv-dash-days  { font-size: 0.76rem; color: #64748b; }
 .inv-dash-expired .inv-dash-days { color: #d97706; font-weight: 600; }
+.inv-dash-left  { display: flex; flex-direction: column; gap: 1px; }
+.inv-dash-earn  { font-size: 0.88rem; font-weight: 600; white-space: nowrap; align-self: center; }
+.inv-dash-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 2px solid #e2e8f0;
+  padding-top: 9px;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
 
 /* Preview box u modalu */
 .inv-preview-box {
