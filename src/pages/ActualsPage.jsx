@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import DataGrid from '../components/DataGrid.jsx';
+import ImportModal from '../components/ImportModal.jsx';
 import {
   fmtEUR, currentMonthIdx,
   actualIncomeMonth, actualExpenseMonth,
@@ -324,10 +325,17 @@ function ActualsGridMobile({ typeView }) {
 export default function ActualsPage() {
   const { state }   = useApp();
   const isMobile    = useIsMobile();
-  const [actualType, setActualType] = useState('income');
+  const [actualType,   setActualType]   = useState('income');
+  const [showImport,   setShowImport]   = useState(false);
 
   return (
     <section>
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(true)}>
+          ↑ Uvezi iz banke
+        </button>
+      </div>
       <QuickAdd />
       <div className="card">
         <div className="card-title"><h2>Nedavna aktivnost</h2></div>

@@ -41,7 +41,9 @@ export function defaultState() {
     groupPlan: {},
     useGroupPlan: {},
     entries: [],
-    investments: []
+    investments: [],
+    importRules: { merchants: {}, standingOrders: {} },
+    importedRefs: []
   };
 }
 
@@ -83,7 +85,9 @@ export function loadState() {
         });
         parsed._migratedV2 = true;
       }
-      if (!parsed.investments) parsed.investments = [];
+      if (!parsed.investments)  parsed.investments  = [];
+      if (!parsed.importRules)  parsed.importRules  = { merchants: {}, standingOrders: {} };
+      if (!parsed.importedRefs) parsed.importedRefs = [];
       ensurePlanArrays(parsed);
       return parsed;
     }
