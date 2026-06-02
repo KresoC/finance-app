@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext.jsx';
 import DataGrid from '../components/DataGrid.jsx';
 import ImportModal from '../components/ImportModal.jsx';
 import {
-  fmtEUR, currentMonthIdx,
+  fmtEUR, currentMonthIdx, activeBillingMonth,
   actualIncomeMonth, actualExpenseMonth,
   plannedIncomeMonth, plannedExpenseMonth,
   todayStr, MONTHS_LONG
@@ -80,7 +80,7 @@ function QuickAdd() {
     newState.recentEntries = entries.slice(0, 30);
     updateState(newState);
     setValue('');
-    setFeedback({ type: 'good', text: '✓ ' + (r.type === 'income' ? 'Prihod' : 'Trosak') + ' ' + fmtEUR(r.amount) + ' u "' + r.catName + '"' });
+    setFeedback({ type: 'good', text: '✓ ' + (r.type === 'income' ? 'Prihod' : 'Trosak') + ' ' + fmtEUR(r.amount) + ' → ' + r.catName + ' / ' + MONTHS_LONG[r.month] });
     setTimeout(() => setFeedback(null), 4000);
   }
 
@@ -162,11 +162,12 @@ function ActivityFeed() {
 
 // ── MonthlyReality ────────────────────────────────────────────────────────────
 function MonthlyReality({ state }) {
+  const bm  = activeBillingMonth(state);
   const cm  = currentMonthIdx(state);
-  const ia  = actualIncomeMonth(state, cm);
-  const ea  = actualExpenseMonth(state, cm);
+  const ia  = actualIncomeMonth(state, bm);
+  const ea  = actualExpenseMonth(state, bm);
   const net = ia - ea;
-  const planNet = plannedIncomeMonth(state, cm) - plannedExpenseMonth(state, cm);
+  const planNet = plannedIncomeMonth(state, bm) - plannedExpenseMonth(state, bm);
   const diff    = net - planNet;
 
   let statusText, statusCls;
@@ -179,7 +180,10 @@ function MonthlyReality({ state }) {
   return (
     <div className="card">
       <div className="card-title">
-        <h2>{(ML[cm] || '').toUpperCase()} {state.year}</h2>
+        <h2>
+          {(ML[bm] || '').toUpperCase()} {state.year}
+          {bm !== cm && <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#94a3b8', marginLeft: 6 }}>billing ciklus</span>}
+        </h2>
         <span className={'month-status-badge ' + statusCls}>{statusText}</span>
       </div>
       <div className="hero-grid">
@@ -247,8 +251,7 @@ function ActualsMobileRow({ name, val, isActive, onUpdate }) {
 // ── ActualsGridMobile ─────────────────────────────────────────────────────────
 function ActualsGridMobile({ typeView }) {
   const { state, updateState } = useApp();
-  const curM = currentMonthIdx(state);
-  const [activeMonth, setActiveMonth] = useState(curM);
+  const [activeMonth, setActiveMonth] = useState(() => activeBillingMonth(state));
 
   const cats = state.categories[typeView];
 

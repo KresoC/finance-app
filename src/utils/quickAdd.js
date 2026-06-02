@@ -1,4 +1,4 @@
-import { currentMonthIdx } from './finance.js';
+import { currentMonthIdx, activeBillingMonth } from './finance.js';
 
 export const QA_SYNONYMS = {
   'struja': ['hep'],
@@ -84,13 +84,22 @@ export function parseQuickAdd(text, state) {
   if (!bestCat) bestCat = state.categories[type].find(c => /ostalo/i.test(c.name) || /redovni/i.test(c.name)) || state.categories[type][0];
   if (!bestCat) return { error: 'Nema kategorija. Dodaj ih u Postavkama.' };
   const months = isPlanned ? (detectTargetMonths(lower) || [0,1,2,3,4,5,6,7,8,9,10,11]) : null;
+
+  // Za actual unose: pokušaj parsirati naziv mjeseca iz teksta,
+  // inače koristi activeBillingMonth (prethodni do 15., tekući od 16.)
+  let month = activeBillingMonth(state);
+  if (!isPlanned) {
+    const detected = detectTargetMonths(lower);
+    if (detected && detected.length === 1) month = detected[0];
+  }
+
   return {
     mode: isPlanned ? 'planned' : 'actual',
     amount,
     type,
     catId: bestCat.id,
     catName: bestCat.name,
-    month: currentMonthIdx(state),
+    month,
     months,
     label: text
   };

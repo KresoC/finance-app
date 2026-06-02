@@ -3,12 +3,13 @@ import { ensurePlanArrays, defaultState } from '../store/state.js';
 import {
   fmtEUR, currentBalance, plannedBalanceToday, projectionYearEnd,
   chainedProjectionYearEnd, plannedEndOfYear, actualNetMonth, plannedNetMonth,
-  currentMonthIdx, generatePlanFromActuals
+  currentMonthIdx, activeBillingMonth, generatePlanFromActuals, MONTHS_HR
 } from '../utils/finance.js';
 
 export default function Header({ syncMsg }) {
   const { state, updateState, setStateSilent } = useApp();
   const cm = currentMonthIdx(state);
+  const bm = activeBillingMonth(state); // billing month (prethodni do 15.)
   const cb = currentBalance(state);
   const pt = plannedBalanceToday(state);
   const ptDelta = cb - pt;
@@ -115,9 +116,9 @@ export default function Header({ syncMsg }) {
           <div className="sub">{(projDelta >= 0 ? '+' : '') + fmtEUR(projDelta)} vs plan</div>
         </div>
         <div className="top-kpi">
-          <div className="label">Ovaj mjesec - saldo</div>
-          <div className="value">{fmtEUR(actualNetMonth(state, cm))}</div>
-          <div className="sub">plan {fmtEUR(plannedNetMonth(state, cm))}</div>
+          <div className="label">{MONTHS_HR[bm]} - saldo</div>
+          <div className="value">{fmtEUR(actualNetMonth(state, bm))}</div>
+          <div className="sub">plan {fmtEUR(plannedNetMonth(state, bm))}</div>
         </div>
       </div>
     </header>
