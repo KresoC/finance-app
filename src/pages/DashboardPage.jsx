@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext.jsx';
 import {
-  fmtEUR, currentMonthIdx, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
+  fmtEUR, currentMonthIdx, activeBillingMonth, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
   plannedEndOfYear, plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth,
   actualExpenseMonth, plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
   startMonthIdx, startIsThisYear, isPlacaCat, MONTHS_HR, MONTHS_LONG
@@ -89,16 +89,19 @@ function StatGrid({ state }) {
 
 function LiveTracking({ state }) {
   const cm = currentMonthIdx(state);
+  const bm = activeBillingMonth(state); // billing month: prethodni do 15., tekući od 16.
+
+  // ── Redovni budget za billing month ──
   let redName = 'Redovni budget', redPlan = 0, redActual = 0;
   const redCat = state.categories.expense.find(c => /redovni/i.test(c.name));
   if (redCat) {
     if (redCat.group && state.useGroupPlan && state.useGroupPlan[redCat.group]) {
-      redPlan = (state.groupPlan[redCat.group] && state.groupPlan[redCat.group][cm]) || 0;
-      state.categories.expense.forEach(c => { if (c.group === redCat.group) redActual += (state.actual[c.id] && state.actual[c.id][cm]) || 0; });
+      redPlan = (state.groupPlan[redCat.group] && state.groupPlan[redCat.group][bm]) || 0;
+      state.categories.expense.forEach(c => { if (c.group === redCat.group) redActual += (state.actual[c.id] && state.actual[c.id][bm]) || 0; });
       redName = redCat.group + ' (grupa)';
     } else {
-      redPlan = (state.plan[redCat.id] && state.plan[redCat.id][cm]) || 0;
-      redActual = (state.actual[redCat.id] && state.actual[redCat.id][cm]) || 0;
+      redPlan = (state.plan[redCat.id] && state.plan[redCat.id][bm]) || 0;
+      redActual = (state.actual[redCat.id] && state.actual[redCat.id][bm]) || 0;
       redName = redCat.name;
     }
   }
@@ -106,10 +109,15 @@ function LiveTracking({ state }) {
   const redPct = redPlan > 0 ? Math.round((redActual / redPlan) * 100) : 0;
   const barCls = 'br-bar-fill spend' + (redPct > 100 ? ' bad' : (redPct > 85 ? ' warn' : ''));
 
+  // ── Plaća i "Ostalo" za billing month ──
   const placaCat = state.categories.income.find(c => isPlacaCat(c));
-  const placaA = placaCat ? ((state.actual[placaCat.id] && state.actual[placaCat.id][cm]) || 0) : 0;
-  const totalExp = actualExpenseMonth(state, cm);
-  const rem = placaA - totalExp;
+  const placaA   = placaCat ? ((state.actual[placaCat.id] && state.actual[placaCat.id][bm]) || 0) : 0;
+  const totalExp = actualExpenseMonth(state, bm);
+  const rem      = placaA - totalExp;
+
+  // Datum kad se očekuje plaća (15. sljedećeg kalendarskog mjeseca)
+  const payDue     = new Date(state.year, bm + 1, 15);
+  const payDueStr  = '15.' + (bm + 2) + '.'; // bm je 0-indexed, prikaz 1-indexed
 
   let placaDetail;
   if (!placaCat) {
@@ -117,27 +125,27 @@ function LiveTracking({ state }) {
   } else if (placaA > 0) {
     placaDetail = <span><span style={{ color: '#059669', fontWeight: 600 }}>✓ Primljena</span> {fmtEUR(placaA)} − troskovi {fmtEUR(totalExp)}</span>;
   } else {
-    const prevM = cm - 1;
-    const planPrev = prevM >= 0 ? ((state.plan[placaCat.id] && state.plan[placaCat.id][prevM]) || 0) : 0;
-    const planCur = (state.plan[placaCat.id] && state.plan[placaCat.id][cm]) || 0;
-    const today = new Date();
-    if (planPrev > 0) {
-      const expectedDate = new Date(state.year, cm, 15);
-      if (today > expectedDate) {
-        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Kasni</span>: placa {fmtEUR(planPrev)} ocekivana do 15.{cm+1}.</span>;
+    const planBm  = (state.plan[placaCat.id] && state.plan[placaCat.id][bm]) || 0;
+    const today   = new Date();
+    if (planBm > 0) {
+      if (today > payDue) {
+        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Kasni</span>: placa {fmtEUR(planBm)} ocekivana do {payDueStr}</span>;
       } else {
-        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planPrev)} do 15.{cm+1}.</span>;
+        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planBm)} do {payDueStr}</span>;
       }
-    } else if (planCur > 0) {
-      placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planCur)} za {MONTHS_LONG[cm]} (isplata 15.{cm+2}.)</span>;
     } else {
-      placaDetail = <span>Nema planiranih placa za ovaj mjesec</span>;
+      placaDetail = <span>Nema planiranih placa za ovaj ciklus</span>;
     }
   }
 
+  // Label: pokazuje koji billing ciklus je aktivan
+  const cycleLabel = bm !== cm
+    ? MONTHS_HR[bm] + ' (ciklus)'
+    : 'danas';
+
   return (
     <div className="card">
-      <div className="card-title"><h2>Tekuca kontrola</h2><span className="muted">danas</span></div>
+      <div className="card-title"><h2>Tekuca kontrola</h2><span className="muted">{cycleLabel}</span></div>
       <div className="hero-grid two">
         <div className="card stat-card live-stat">
           <div className="stat-label">{redName}</div>
@@ -159,8 +167,9 @@ function LiveTracking({ state }) {
 
 function MonthlyStatus({ state }) {
   const cm = currentMonthIdx(state);
-  const planExpense = plannedExpenseMonth(state, cm);
-  const actualExpense = actualExpenseMonth(state, cm);
+  const bm = activeBillingMonth(state);
+  const planExpense = plannedExpenseMonth(state, bm);
+  const actualExpense = actualExpenseMonth(state, bm);
   const dev = actualExpense - planExpense;
   const spendPct = planExpense > 0 ? Math.round((actualExpense / planExpense) * 100) : 0;
 
@@ -172,13 +181,13 @@ function MonthlyStatus({ state }) {
 
   let brNoteCls = 'br-note';
   let brNoteText;
-  if (planExpense < 1) brNoteText = 'Nema planiranih troskova za ovaj mjesec.';
-  else if (spendPct > 100) { brNoteText = '🔴 Potrosio si ' + spendPct + '% mjesecnog budgeta - presao si plan.'; brNoteCls += ' bad'; }
+  if (planExpense < 1) brNoteText = 'Nema planiranih troskova za ovaj ciklus.';
+  else if (spendPct > 100) { brNoteText = '🔴 Potrosio si ' + spendPct + '% budgeta ciklusa - presao si plan.'; brNoteCls += ' bad'; }
   else brNoteText = 'Potroseno: ' + fmtEUR(actualExpense) + ' / ' + fmtEUR(planExpense) + ' (' + spendPct + '% budgeta).';
 
   const spendBarCls = 'br-bar-fill spend' + (spendPct > 100 ? ' bad' : spendPct > 90 ? ' warn' : '');
 
-  // Top deviations
+  // Top deviations za billing month
   const items = [];
   const seen = new Set();
   state.categories.expense.forEach(c => {
@@ -186,14 +195,14 @@ function MonthlyStatus({ state }) {
     if (g && state.useGroupPlan && state.useGroupPlan[g]) {
       if (seen.has(g)) return;
       seen.add(g);
-      const plan = (state.groupPlan[g] && state.groupPlan[g][cm]) || 0;
+      const plan = (state.groupPlan[g] && state.groupPlan[g][bm]) || 0;
       let actual = 0;
-      state.categories.expense.forEach(cc => { if (cc.group === g) actual += (state.actual[cc.id] && state.actual[cc.id][cm]) || 0; });
+      state.categories.expense.forEach(cc => { if (cc.group === g) actual += (state.actual[cc.id] && state.actual[cc.id][bm]) || 0; });
       if (plan === 0 && actual === 0) return;
       items.push({ name: g + ' (grupa)', plan, actual, delta: actual - plan });
     } else {
-      const plan = (state.plan[c.id] && state.plan[c.id][cm]) || 0;
-      const actual = (state.actual[c.id] && state.actual[c.id][cm]) || 0;
+      const plan = (state.plan[c.id] && state.plan[c.id][bm]) || 0;
+      const actual = (state.actual[c.id] && state.actual[c.id][bm]) || 0;
       if (plan === 0 && actual === 0) return;
       items.push({ name: c.name, plan, actual, delta: actual - plan });
     }
@@ -204,7 +213,10 @@ function MonthlyStatus({ state }) {
   return (
     <div className="card month-status-card">
       <div className="card-title">
-        <h2><span>{(MONTHS_LONG[cm] || '').toUpperCase()}</span> <span>{state.year}</span></h2>
+        <h2>
+          <span>{(MONTHS_LONG[bm] || '').toUpperCase()}</span> <span>{state.year}</span>
+          {bm !== cm && <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#94a3b8', marginLeft: 6 }}>billing ciklus</span>}
+        </h2>
         <span className={'month-status-badge ' + statusCls}>{statusText}</span>
       </div>
       <div className="month-grid">
@@ -652,9 +664,9 @@ function MobileCategoryCards({ groups }) {
 
 // ── DashCategoryTable ─────────────────────────────────────────────────────────
 function DashCategoryTable({ state }) {
-  const cm = currentMonthIdx(state);
+  const bm = activeBillingMonth(state);
   const isMobile = useIsMobile();
-  const groups = buildGroups(state, cm);
+  const groups = buildGroups(state, bm);
 
   if (groups.length === 0) return null;
 
@@ -687,10 +699,10 @@ function DashCategoryTable({ state }) {
     if (useGroup) {
       if (!seenGroups.has(c.group)) {
         seenGroups.add(c.group);
-        const groupPlanVal = state.groupPlan?.[c.group]?.[cm] || 0;
+        const groupPlanVal = state.groupPlan?.[c.group]?.[bm] || 0;
         let groupActual = 0;
         state.categories[c.type].forEach(cc => {
-          if (cc.group === c.group) groupActual += state.actual[cc.id]?.[cm] || 0;
+          if (cc.group === c.group) groupActual += state.actual[cc.id]?.[bm] || 0;
         });
         const delta = groupActual - groupPlanVal;
         const deltaClass = c.type === 'expense'
@@ -710,7 +722,7 @@ function DashCategoryTable({ state }) {
           </tr>
         );
       }
-      const actual = state.actual[c.id]?.[cm] || 0;
+      const actual = state.actual[c.id]?.[bm] || 0;
       if (actual > 0) {
         rows.push(
           <tr key={'ugsub-' + c.id}>
@@ -724,8 +736,8 @@ function DashCategoryTable({ state }) {
       }
       return;
     }
-    const plan = state.plan[c.id]?.[cm] || 0;
-    const actual = state.actual[c.id]?.[cm] || 0;
+    const plan = state.plan[c.id]?.[bm] || 0;
+    const actual = state.actual[c.id]?.[bm] || 0;
     if (plan === 0 && actual === 0) return;
     const delta = actual - plan;
     const deltaClass = c.type === 'expense'
