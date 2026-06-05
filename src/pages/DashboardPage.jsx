@@ -110,14 +110,19 @@ function LiveTracking({ state }) {
   const barCls = 'br-bar-fill spend' + (redPct > 100 ? ' bad' : (redPct > 85 ? ' warn' : ''));
 
   // ── Plaća i "Ostalo" za billing month ──
+  // Plaća koja financira ovaj billing ciklus stigla je 15. tekućeg kalendarskog
+  // mjeseca (cm), a odnosi se na prethodni kalendarski mjesec (cm-1).
+  // Npr. na 5.6. čekamo plaću za 5.mj koja stiže 15.6.
+  //       od 16.6. plaća za 5.mj je (trebala biti) unesena 15.6.
+  const salaryMonth = cm > 0 ? cm - 1 : 0; // prethodni kalendarski = plaća koja financira ovaj ciklus
   const placaCat = state.categories.income.find(c => isPlacaCat(c));
-  const placaA   = placaCat ? ((state.actual[placaCat.id] && state.actual[placaCat.id][bm]) || 0) : 0;
+  const placaA   = placaCat ? (state.actual[placaCat.id]?.[salaryMonth] || 0) : 0;
   const totalExp = actualExpenseMonth(state, bm);
   const rem      = placaA - totalExp;
 
-  // Datum kad se očekuje plaća (15. sljedećeg kalendarskog mjeseca)
-  const payDue     = new Date(state.year, bm + 1, 15);
-  const payDueStr  = '15.' + (bm + 2) + '.'; // bm je 0-indexed, prikaz 1-indexed
+  // Plaća stiže 15. tekućeg kalendarskog mjeseca
+  const payDue    = new Date(state.year, cm, 15);
+  const payDueStr = '15.' + (cm + 1) + '.';
 
   let placaDetail;
   if (!placaCat) {
@@ -125,16 +130,16 @@ function LiveTracking({ state }) {
   } else if (placaA > 0) {
     placaDetail = <span><span style={{ color: '#059669', fontWeight: 600 }}>✓ Primljena</span> {fmtEUR(placaA)} − troskovi {fmtEUR(totalExp)}</span>;
   } else {
-    const planBm  = (state.plan[placaCat.id] && state.plan[placaCat.id][bm]) || 0;
-    const today   = new Date();
-    if (planBm > 0) {
+    const planSalary = state.plan[placaCat.id]?.[salaryMonth] || 0;
+    const today      = new Date();
+    if (planSalary > 0) {
       if (today > payDue) {
-        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Kasni</span>: placa {fmtEUR(planBm)} ocekivana do {payDueStr}</span>;
+        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Kasni</span>: placa {fmtEUR(planSalary)} ocekivana do {payDueStr}</span>;
       } else {
-        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planBm)} do {payDueStr}</span>;
+        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planSalary)} do {payDueStr}</span>;
       }
     } else {
-      placaDetail = <span>Nema planiranih placa za ovaj ciklus</span>;
+      placaDetail = <span>Nema planiranih prihoda za ovaj ciklus</span>;
     }
   }
 
