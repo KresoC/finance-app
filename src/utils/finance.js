@@ -22,12 +22,13 @@ export function currentMonthIdx(state) {
   return today.getMonth();
 }
 
-// "Billing month" — do 15. u mjesecu prikazuj i unosi prethodni mjesec
-// (plaća stiže ~15., pa se troškovi s početka mjeseca bilježe u prethodni ciklus)
+// "Billing month" — billing ciklus počinje/završava na točno 15.
+// 1.6.–14.6.  → bm = Svibanj (troškovi i plaća prethodnog ciklusa)
+// 15.6.–14.7. → bm = Lipanj  (nova plaća stiže 15.6., troškovi od 15.6.)
 export function activeBillingMonth(state) {
   const today = new Date();
   const cm    = currentMonthIdx(state);
-  if (state.year === today.getFullYear() && today.getDate() <= 15 && cm > 0) {
+  if (state.year === today.getFullYear() && today.getDate() < 15 && cm > 0) {
     return cm - 1;
   }
   return cm;

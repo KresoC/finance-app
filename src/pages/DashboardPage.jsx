@@ -110,19 +110,17 @@ function LiveTracking({ state }) {
   const barCls = 'br-bar-fill spend' + (redPct > 100 ? ' bad' : (redPct > 85 ? ' warn' : ''));
 
   // ── Plaća i "Ostalo" za billing month ──
-  // Plaća koja financira ovaj billing ciklus stigla je 15. tekućeg kalendarskog
-  // mjeseca (cm), a odnosi se na prethodni kalendarski mjesec (cm-1).
-  // Npr. na 5.6. čekamo plaću za 5.mj koja stiže 15.6.
-  //       od 16.6. plaća za 5.mj je (trebala biti) unesena 15.6.
-  const salaryMonth = cm > 0 ? cm - 1 : 0; // prethodni kalendarski = plaća koja financira ovaj ciklus
+  // Billing ciklus = od 15. do 14. sljedećeg. Plaća koja financira ciklus
+  // stiže 15-og (= početak ciklusa) i upisuje se u billing month.
+  // Npr. 15.6.→14.7.: bm=Lipanj, plaća za 5.mj unesena u Lipanj, troškovi Lipnja.
   const placaCat = state.categories.income.find(c => isPlacaCat(c));
-  const placaA   = placaCat ? (state.actual[placaCat.id]?.[salaryMonth] || 0) : 0;
+  const placaA   = placaCat ? (state.actual[placaCat.id]?.[bm] || 0) : 0;
   const totalExp = actualExpenseMonth(state, bm);
   const rem      = placaA - totalExp;
 
-  // Plaća stiže 15. tekućeg kalendarskog mjeseca
-  const payDue    = new Date(state.year, cm, 15);
-  const payDueStr = '15.' + (cm + 1) + '.';
+  // Plaća stiže 15. prvog dana billing ciklusa = 15. tekućeg bm
+  const payDue    = new Date(state.year, bm, 15);
+  const payDueStr = '15.' + (bm + 1) + '.';
 
   let placaDetail;
   if (!placaCat) {
@@ -130,13 +128,13 @@ function LiveTracking({ state }) {
   } else if (placaA > 0) {
     placaDetail = <span><span style={{ color: '#059669', fontWeight: 600 }}>✓ Primljena</span> {fmtEUR(placaA)} − troskovi {fmtEUR(totalExp)}</span>;
   } else {
-    const planSalary = state.plan[placaCat.id]?.[salaryMonth] || 0;
+    const planSalary = state.plan[placaCat.id]?.[bm] || 0;
     const today      = new Date();
     if (planSalary > 0) {
-      if (today > payDue) {
-        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Kasni</span>: placa {fmtEUR(planSalary)} ocekivana do {payDueStr}</span>;
+      if (today >= payDue) {
+        placaDetail = <span><span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Unesi placu</span>: ocekivana {payDueStr} ({fmtEUR(planSalary)})</span>;
       } else {
-        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planSalary)} do {payDueStr}</span>;
+        placaDetail = <span><span style={{ color: '#d97706', fontWeight: 600 }}>⏳ Pending</span>: placa {fmtEUR(planSalary)} stiže {payDueStr}</span>;
       }
     } else {
       placaDetail = <span>Nema planiranih prihoda za ovaj ciklus</span>;
@@ -266,8 +264,9 @@ function MonthlyStatus({ state }) {
 }
 
 function InsightsCard({ state }) {
-  const cm = currentMonthIdx(state);
-  const sm = startMonthIdx(state);
+  const cm  = currentMonthIdx(state);
+  const bm  = activeBillingMonth(state);
+  const sm  = startMonthIdx(state);
   const fromM = startIsThisYear(state) ? sm : 0;
   const insights = [];
 
@@ -278,12 +277,14 @@ function InsightsCard({ state }) {
   else if (gd > 0) insights.push({ cls: 'good', icon: '🟢', text: 'Forecast je ' + fmtEUR(gd) + ' iznad godisnjeg cilja' });
   else insights.push({ cls: 'bad', icon: '🔴', text: 'Forecast je ' + fmtEUR(Math.abs(gd)) + ' ispod godisnjeg cilja' });
 
-  const mExpA = actualExpenseMonth(state, cm);
-  const mExpP = plannedExpenseMonth(state, cm);
+  // Troškovi tekućeg billing ciklusa (bm = billing month)
+  const mExpA = actualExpenseMonth(state, bm);
+  const mExpP = plannedExpenseMonth(state, bm);
   const mExpDiff = mExpA - mExpP;
+  const bmLabel = MONTHS_LONG[bm];
   if (mExpP > 0 && Math.abs(mExpDiff) > 50) {
-    if (mExpDiff > 0) insights.push({ cls: 'warn', icon: '⚠️', text: 'Troskovi ovog mjeseca su ' + fmtEUR(mExpDiff) + ' iznad plana' });
-    else insights.push({ cls: 'good', icon: '🟢', text: 'Troskovi ovog mjeseca su ' + fmtEUR(Math.abs(mExpDiff)) + ' ispod plana (usteda)' });
+    if (mExpDiff > 0) insights.push({ cls: 'warn', icon: '⚠️', text: 'Troskovi ' + bmLabel + ' su ' + fmtEUR(mExpDiff) + ' iznad plana' });
+    else insights.push({ cls: 'good', icon: '🟢', text: 'Troskovi ' + bmLabel + ' su ' + fmtEUR(Math.abs(mExpDiff)) + ' ispod plana (usteda)' });
   }
 
   const items = [];
