@@ -34,9 +34,16 @@ function HeroCard({ state }) {
   );
 }
 
+function activeInvReturns(state) {
+  return (state.investments || [])
+    .filter(i => i.status === 'active' && i.date >= state.startDate)
+    .reduce((s, i) => s + (i.faceValue ? i.faceValue - i.amount : i.amount * (i.rate / 100) * (i.days / 365)), 0);
+}
+
 function StatGrid({ state }) {
   const cm = currentMonthIdx(state);
   const cb = currentBalance(state);
+  const invReturns = activeInvReturns(state);
   const proj = chainedProjectionYearEnd(state);
   const goal = plannedEndOfYear(state);
   const dev = proj - goal;
@@ -62,7 +69,8 @@ function StatGrid({ state }) {
       <div className="hero-grid">
         <div className="card stat-card">
           <div className="stat-label">Trenutno stanje</div>
-          <div className="stat-value">{fmtEUR(cb)}</div>
+          <div className="stat-value">{fmtEUR(cb + invReturns)}</div>
+          {invReturns > 0 && <div className="stat-sub">uklj. prinos {fmtEUR(invReturns)} od trezorskih zapisa</div>}
         </div>
         <div className="card stat-card">
           <div className="stat-label">Cilj 31.12.</div>
