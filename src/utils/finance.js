@@ -131,17 +131,29 @@ export function plannedBalanceToday(state) {
   return sum;
 }
 
+// Plaća za prosinac (zarađena u prosincu, stiže 15.1. sljedeće godine)
+// Koristi actual iz siječnja sljedeće godine ako postoji, inače plan[11] kao proxy.
+function decSalaryNextJan(state) {
+  let sum = 0;
+  const ny = state.yearsData?.[state.year + 1];
+  state.categories.income.forEach(c => {
+    if (!isPlacaCat(c)) return;
+    const actual = ny?.actual?.[c.id]?.[0] || 0;
+    const planAmt = state.plan[c.id]?.[11] || 0;
+    sum += actual > 0 ? actual : planAmt;
+  });
+  return sum;
+}
+
 export function effectiveIncomeMonth(state, m) {
   let sum = 0;
   state.categories.income.forEach(c => {
     let a = 0;
     if (isPlacaCat(c)) {
-      if (m < 11) {
-        a = (state.actual[c.id] && state.actual[c.id][m+1]) || 0;
-      } else {
-        const ny = state.yearsData && state.yearsData[state.year + 1];
-        a = (ny && ny.actual && ny.actual[c.id] && ny.actual[c.id][0]) || 0;
-      }
+      // Plaća za mjesec m stiže u m+1; za prosinac (m=11) stiže u prosincu (actual[11])
+      // Plaća za prosinački rad stiže 15.1. i dodaje se posebno u decSalaryNextJan.
+      const idx = m < 11 ? m + 1 : 11;
+      a = (state.actual[c.id]?.[idx]) || 0;
     } else {
       a = (state.actual[c.id] && state.actual[c.id][m]) || 0;
     }
@@ -232,6 +244,9 @@ export function projectionYearEnd(state) {
     sum -= Math.max(annualPlan, annualActual);
   });
 
+  // Plaća za prosinački rad stiže 15.1. sljedeće godine — pripada ovoj godini
+  sum += decSalaryNextJan(state);
+
   return sum;
 }
 
@@ -241,6 +256,8 @@ export function plannedEndOfYear(state) {
   const fromM = sIsThis ? sm : 0;
   let sum = state.initialBalance;
   for (let m = fromM; m < 12; m++) sum += plannedNetMonth(state, m);
+  // Plaća za prosinački rad stiže 15.1. sljedeće godine — pripada ovoj godini
+  sum += decSalaryNextJan(state);
   return sum;
 }
 

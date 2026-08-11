@@ -61,6 +61,16 @@ function StatGrid({ state }) {
         for (let m = cm; m < 12; m++) s += (state.plan[c.id] && state.plan[c.id][m]) || 0;
       }
     });
+    // Za prihode: dodaj plaću za prosinački rad (stiže 15.1. sljedeće godine)
+    if (type === 'income') {
+      const ny = state.yearsData?.[state.year + 1];
+      state.categories.income.forEach(c => {
+        if (!isPlacaCat(c)) return;
+        const actual = ny?.actual?.[c.id]?.[0] || 0;
+        const planAmt = state.plan[c.id]?.[11] || 0;
+        s += actual > 0 ? actual : planAmt;
+      });
+    }
     return s;
   }
 
