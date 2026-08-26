@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { loadState, saveStateToStorage, ensurePlanArrays, defaultState, STORAGE_KEY } from './state.js';
 
 const AppContext = createContext(null);
@@ -10,16 +10,26 @@ const CHAT_KEY_STORAGE = STORAGE_KEY + '_chat';
 export function AppProvider({ children }) {
   const [state, setStateRaw] = useState(() => loadState());
 
-  const updateState = useCallback((newState) => {
+  // Zrcali zadnje stanje da uzastopne izmjene u istom tiku ne gaze jedna drugu.
+  // Bez toga svaki handler krece od `state` iz svog rendera, pa zadnji upis pobijedi.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Prima objekt (stari nacin) ili funkciju (prev => next) koja uvijek vidi svjeze stanje.
+  const updateState = useCallback((next) => {
+    const newState = typeof next === 'function' ? next(stateRef.current) : next;
     newState._lastModified = Date.now();
     snapshotActiveYear(newState);
     saveStateToStorage(newState);
+    stateRef.current = newState;
     setStateRaw({ ...newState });
     debounceSyncPush(newState);
   }, []);
 
-  const setStateSilent = useCallback((newState) => {
+  const setStateSilent = useCallback((next) => {
+    const newState = typeof next === 'function' ? next(stateRef.current) : next;
     saveStateToStorage(newState);
+    stateRef.current = newState;
     setStateRaw({ ...newState });
   }, []);
 

@@ -10,6 +10,7 @@ import ActualsPage from './pages/ActualsPage.jsx';
 import MonthlyPage from './pages/MonthlyPage.jsx';
 import AssistantPage from './pages/AssistantPage.jsx';
 import TrezorPage from './pages/TrezorPage.jsx';
+import MirovinaPage from './pages/MirovinaPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 
 function AppInner() {
@@ -25,7 +26,8 @@ function AppInner() {
       if (c.apiKey && c.binId) {
         pullFromCloud(true, remote => {
           ensurePlanArrays(remote);
-          setStateSilent({ ...remote });
+          // Cloud jos ne mora imati longTerm (starije verzije) — ne gazi lokalni.
+          setStateSilent(prev => ({ ...remote, longTerm: remote.longTerm || prev.longTerm }));
         }).catch(() => {});
       }
     }
@@ -64,6 +66,7 @@ function AppInner() {
         {activeTab === 'monthly' && <MonthlyPage />}
         {activeTab === 'asistent' && <AssistantPage />}
         {activeTab === 'trezor'   && <TrezorPage />}
+        {activeTab === 'mirovina' && <MirovinaPage />}
         {activeTab === 'settings' && <SettingsPage />}
       </main>
       <FloatingAssistant />

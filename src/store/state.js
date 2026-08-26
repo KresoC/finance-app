@@ -1,3 +1,5 @@
+import { defaultLongTerm } from '../utils/longterm.js';
+
 export const STORAGE_KEY = 'kucneFinancije_v1';
 export const MONTHS_HR = ['Sij','Velj','Ozu','Tra','Svi','Lip','Srp','Kol','Ruj','Lis','Stu','Pro'];
 export const MONTHS_LONG = ['Sijecanj','Veljaca','Ozujak','Travanj','Svibanj','Lipanj','Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'];
@@ -42,6 +44,7 @@ export function defaultState() {
     useGroupPlan: {},
     entries: [],
     investments: [],
+    longTerm: defaultLongTerm(),
     importRules: { merchants: {}, standingOrders: {} },
     importedRefs: []
   };
@@ -86,6 +89,7 @@ export function loadState() {
         parsed._migratedV2 = true;
       }
       if (!parsed.investments)  parsed.investments  = [];
+      if (!parsed.longTerm)     parsed.longTerm     = defaultLongTerm();
       if (!parsed.importRules)  parsed.importRules  = { merchants: {}, standingOrders: {} };
       if (!parsed.importedRefs) parsed.importedRefs = [];
       ensurePlanArrays(parsed);

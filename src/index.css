@@ -1475,3 +1475,36 @@ td.inactive-cell.col-current { background: #f0f9ff; }
 .btn-secondary:hover { background: #cbd5e1; }
 .btn-sm        { padding: 7px 12px; font-size: 0.85rem; }
 .import-empty  { text-align: center; padding: 30px; color: #94a3b8; font-size: 0.9rem; }
+
+/* ─── Mirovina / dugoročna projekcija ─────────────────────────────────────── */
+.nav-btn span:last-child { white-space: nowrap; }
+
+.lt-row-sub { font-size: 0.72rem; color: #94a3b8; margin-top: 2px; font-weight: 400; }
+
+.lt-total-row td { border-top: 1px solid #cbd5e1; background: #f8fafc; }
+.lt-grand-row td { border-top: 2px solid #0f766e; background: #f0fdfa; font-size: 1.02rem; }
+
+.lt-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .lt-fields { grid-template-columns: 1fr; } }
+
+.lt-field { display: flex; flex-direction: column; gap: 4px; }
+.lt-field-label { font-size: 0.78rem; color: #64748b; font-weight: 500; }
+.lt-field-input { display: flex; align-items: center; gap: 6px; }
+.lt-field-input input {
+  flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid #e2e8f0;
+  border-radius: 9px; font-size: 0.95rem; color: #0f172a; background: white;
+}
+.lt-field-input input:focus { outline: none; border-color: #0f766e; }
+.lt-field-suffix { font-size: 0.78rem; color: #94a3b8; flex-shrink: 0; }
+
+.lt-list-block { display: flex; flex-direction: column; gap: 8px; }
+.lt-list-row { display: flex; align-items: center; gap: 6px; }
+.lt-list-row input {
+  padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: 8px;
+  font-size: 0.88rem; color: #0f172a; background: white; min-width: 0;
+}
+.lt-list-row input:focus { outline: none; border-color: #0f766e; }
+.lt-name-input { flex: 1 1 auto; }
+.lt-amt-input  { flex: 0 0 88px; text-align: right; }
+.lt-age-input  { flex: 0 0 58px; text-align: right; }
+.lt-del { flex-shrink: 0; color: #dc2626; padding: 6px 8px; }

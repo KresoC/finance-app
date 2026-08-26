@@ -5,6 +5,7 @@ export default function Navigation({ activeTab, onTabChange }) {
     { id: 'actual', icon: '💰', label: 'Stvarno' },
     { id: 'monthly', icon: '📅', label: 'Mjeseci' },
     { id: 'trezor', icon: '📈', label: 'Ulaganja' },
+    { id: 'mirovina', icon: '🎯', label: 'Mirovina' },
     { id: 'settings', icon: '⚙️', label: 'Postavke' },
   ];
 
