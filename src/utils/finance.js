@@ -290,6 +290,25 @@ export function chainedProjectionYearEnd(state) {
   return projectionYearEnd({ ...state, initialBalance: chainedStart });
 }
 
+// Projekcija kraja odredene godine, bez obzira koja je godina trenutno otvorena.
+// Za aktivnu godinu koristi zivo stanje (yearsData snapshot moze kasniti).
+// Vraca null ako za tu godinu nema podataka.
+export function projectionForYear(state, year) {
+  if (year === state.year) return chainedProjectionYearEnd(state);
+  const d = state.yearsData?.[year];
+  if (!d) return null;
+  return chainedProjectionYearEnd({
+    ...state,
+    year,
+    initialBalance: d.initialBalance ?? 0,
+    startDate: d.startDate ?? (year + '-01-01'),
+    plan: d.plan ?? {},
+    actual: d.actual ?? {},
+    groupPlan: d.groupPlan ?? {},
+    useGroupPlan: d.useGroupPlan ?? {},
+  });
+}
+
 // Generira plan za novu godinu na temelju actuals prethodne godine.
 // categories = state.categories ({ income: [...], expense: [...] })
 // prevYearData = state.yearsData[prevYear] ({ actual: {...}, plan: {...} })

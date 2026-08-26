@@ -1,5 +1,5 @@
 import { useApp } from '../store/AppContext.jsx';
-import { fmtEUR } from '../utils/finance.js';
+import { fmtEUR, projectionForYear } from '../utils/finance.js';
 import { defaultLongTerm, projectLongTerm, raiseSteps, uidLT } from '../utils/longterm.js';
 
 // Kompaktan format za osi grafa: 1.200.000 -> "1,2M"
@@ -91,6 +91,22 @@ function LTBreakdown({ t, lt, years }) {
             <tr><th>Stavka</th><th className="num">Iznos</th></tr>
           </thead>
           <tbody>
+            {t.startBalance !== 0 && (
+              <>
+                <tr className="group-row"><td colSpan={2}>Polazište</td></tr>
+                <tr>
+                  <td className="cat-name">
+                    Početno stanje
+                    <div className="lt-row-sub">
+                      {lt.startBalanceFrom
+                        ? 'procjena kraja ' + lt.startBalanceFrom.year + '. · preuzeto ' + lt.startBalanceFrom.date
+                        : 'ručno upisano'}
+                    </div>
+                  </td>
+                  <td className="num pos">{fmtEUR(t.startBalance)}</td>
+                </tr>
+              </>
+            )}
             <tr className="group-row"><td colSpan={2}>Prihodi</td></tr>
             {income.map((r, i) => (
               <tr key={i}>
@@ -278,15 +294,51 @@ function EditableList({ items, listKey, setLT, withAge, ageRange }) {
 }
 
 // ─── Postavke ───────────────────────────────────────────────────────────────
-function LTSettings({ lt, setLT }) {
+function LTSettings({ lt, setLT, baseYear, baseProjection }) {
   const set = patch => setLT(cur => ({ ...cur, ...patch }));
   const setN = (key, patch) => setLT(cur => ({ ...cur, [key]: { ...cur[key], ...patch } }));
   const ageRange = [lt.ageNow + 1, lt.ageEnd];
   const steps = raiseSteps(lt.raise);
 
+  function takeFromYear() {
+    if (baseProjection === null) return;
+    set({
+      startBalance: Math.round(baseProjection),
+      startBalanceFrom: { year: baseYear, date: new Date().toLocaleDateString('hr-HR') },
+    });
+  }
+
   return (
     <details className="advanced-details">
       <summary className="advanced-summary">Postavke projekcije</summary>
+
+      <div className="card">
+        <div className="card-title"><h2>Polazište</h2></div>
+        <div className="lt-fields">
+          <NumField
+            label="Početno stanje"
+            value={lt.startBalance || 0}
+            onCommit={v => set({ startBalance: v || 0, startBalanceFrom: null })}
+            suffix="EUR"
+          />
+        </div>
+        {baseProjection === null ? (
+          <div className="br-note" style={{ marginTop: 10 }}>
+            Nema podataka za {baseYear}. — upiši početno stanje ručno.
+          </div>
+        ) : (
+          <>
+            <button className="btn secondary small" style={{ marginTop: 10 }} onClick={takeFromYear}>
+              Preuzmi iz projekcije {baseYear}. ({fmtEUR(baseProjection)})
+            </button>
+            <div className="lt-row-sub" style={{ marginTop: 8 }}>
+              Kopira procjenu stanja na 31.12.{baseYear}. kao polazište. Snapshot, ne živa veza —
+              projekcija se ne miče dok opet ne pritisneš. Projekcija kreće od {baseYear + 1}., pa se
+              s {baseYear}. ne preklapa.
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="card">
         <div className="card-title"><h2>Razdoblje i plaća</h2></div>
@@ -348,6 +400,10 @@ function LTSettings({ lt, setLT }) {
 export default function MirovinaPage() {
   const { state, updateState } = useApp();
   const lt = state.longTerm || defaultLongTerm();
+  // Projekcija krece od ageNow+1, sto je iduca kalendarska godina.
+  // Polaziste je zato uvijek tekuca godina, ne ona odabrana u izborniku.
+  const baseYear = new Date().getFullYear();
+  const baseProjection = projectionForYear(state, baseYear);
   const setLT = updater => updateState(prev => {
     const cur = prev.longTerm || defaultLongTerm();
     return { ...prev, longTerm: typeof updater === 'function' ? updater(cur) : updater };
@@ -360,7 +416,7 @@ export default function MirovinaPage() {
           <div className="card-title"><h2>Projekcija do mirovine</h2></div>
           <div className="hero-empty">Dob umirovljenja mora biti veća od trenutne dobi.</div>
         </div>
-        <LTSettings lt={lt} setLT={setLT} />
+        <LTSettings lt={lt} setLT={setLT} baseYear={baseYear} baseProjection={baseProjection} />
       </section>
     );
   }
@@ -374,7 +430,7 @@ export default function MirovinaPage() {
       <LTBreakdown t={t} lt={lt} years={proj.ages.length} />
       <LTChart rows={proj.rows} goalTimeline={proj.goalTimeline} />
       <LTGoals goalTimeline={proj.goalTimeline} untimedCount={t.untimedCount} />
-      <LTSettings lt={lt} setLT={setLT} />
+      <LTSettings lt={lt} setLT={setLT} baseYear={baseYear} baseProjection={baseProjection} />
     </section>
   );
 }

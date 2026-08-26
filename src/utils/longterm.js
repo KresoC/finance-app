@@ -9,6 +9,10 @@ export function defaultLongTerm() {
   return {
     ageNow: 42,
     ageEnd: 65,
+    // Polaziste projekcije: procijenjeno stanje na kraju godine prije prve
+    // projicirane. Snapshot, ne ziva veza — rebasa se rucno gumbom.
+    startBalance: 0,
+    startBalanceFrom: null, // { year, date }
     salary: { monthly: 2924, bonusAnnual: 5000 },
     // Povećanje plaće: total se dijeli na korake, zadnji korak pada u lastAge
     raise: { total: 1000, stepYears: 2, firstAge: 45, lastAge: 63 },
@@ -64,7 +68,8 @@ export function projectLongTerm(lt) {
   const untimed = lt.oneOffs.filter(o => o.age === null || o.age === undefined || o.age === '');
 
   let invBalance = 0, invContributed = 0;
-  let capital = 0;
+  const startBalance = lt.startBalance || 0;
+  let capital = startBalance;
   const rows = [];
   let salaryBase = 0, salaryRaise = 0, bonusTotal = 0, oneOffTotal = 0, interestTotal = 0;
 
@@ -114,9 +119,10 @@ export function projectLongTerm(lt) {
   return {
     ages, rows, goalTimeline,
     totals: {
+      startBalance,
       salaryBase, salaryRaise, bonusTotal, interestTotal, oneOffTotal,
       incomeTotal, expenseTotal, annualExpTotal,
-      net: incomeTotal - expenseTotal,
+      net: startBalance + incomeTotal - expenseTotal,
       goalTotal,
       invContributed, invBalance,
       untimedCount: untimed.length,
