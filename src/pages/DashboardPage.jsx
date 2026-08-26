@@ -4,7 +4,7 @@ import {
   fmtEUR, currentMonthIdx, activeBillingMonth, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
   plannedEndOfYear, plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth,
   actualExpenseMonth, plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
-  startMonthIdx, startIsThisYear, isPlacaCat, MONTHS_HR, MONTHS_LONG
+  startMonthIdx, startIsThisYear, isPlacaCat, decSalaryNextJan, MONTHS_HR, MONTHS_LONG
 } from '../utils/finance.js';
 
 function HeroCard({ state }) {
@@ -62,15 +62,7 @@ function StatGrid({ state }) {
       }
     });
     // Za prihode: dodaj plaću za prosinački rad (stiže 15.1. sljedeće godine)
-    if (type === 'income') {
-      const ny = state.yearsData?.[state.year + 1];
-      state.categories.income.forEach(c => {
-        if (!isPlacaCat(c)) return;
-        const actual = ny?.actual?.[c.id]?.[0] || 0;
-        const planAmt = state.plan[c.id]?.[11] || 0;
-        s += actual > 0 ? actual : planAmt;
-      });
-    }
+    if (type === 'income') s += decSalaryNextJan(state);
     return s;
   }
 
@@ -845,6 +837,8 @@ function NextYearForecastCard({ state }) {
     totalIncome  += plannedIncomeMonth(nextState, m);
     totalExpense += plannedExpenseMonth(nextState, m);
   }
+  // Plaća za prosinački rad nextYear stiže 15.1. godine nakon — pripada nextYear
+  totalIncome += decSalaryNextJan(nextState);
 
   // 2027 postoji ali nema plana
   if (totalIncome === 0 && totalExpense === 0) {

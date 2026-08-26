@@ -133,7 +133,7 @@ export function plannedBalanceToday(state) {
 
 // Plaća za prosinac (zarađena u prosincu, stiže 15.1. sljedeće godine)
 // Koristi actual iz siječnja sljedeće godine ako postoji, inače plan[11] kao proxy.
-function decSalaryNextJan(state) {
+export function decSalaryNextJan(state) {
   let sum = 0;
   const ny = state.yearsData?.[state.year + 1];
   state.categories.income.forEach(c => {
