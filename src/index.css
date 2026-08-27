@@ -86,9 +86,20 @@ input[type="number"] { -moz-appearance: textfield; }
    umjesto svih 7 stisnutih (na 320-375px sirini 7 tabova ne staje). */
 .nav-more-btn { display: none; }
 .nav-more-sheet {
-  position: absolute; bottom: 100%; right: 8px; margin-bottom: 8px;
+  /* Fixed, ne absolute — sheet je sada sestra od <nav> (ne dijete), pa se
+     ne moze osloniti na "bottom:100%" nasljedeno od nav-a kao offset
+     roditelja. Offset priblizno prati stvarnu visinu nav-a (~48-54px
+     sadrzaja + safe area), s malim razmakom iznad. */
+  position: fixed; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); right: 8px;
   background: white; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  padding: 6px; display: flex; flex-direction: column; min-width: 168px; z-index: 200;
+  padding: 6px; display: flex; flex-direction: column; min-width: 168px;
+  /* Iznad floating-ai-btn (z-index 1001) - inace plutajuci asistent gumb
+     fizicki sjedi preko sheeta (isti donji-desni kut) i hvata dodire.
+     Vrijedi tek otkad su sheet i nav sestre — dok je sheet bio DIJETE
+     nav-a (koji ima z-index:100), nav je stvarao vlastiti stacking
+     context i zatvarao sheetov z-index unutar sebe bez obzira na broj,
+     pa je backdrop (izvan nav-a) uvijek zavrsavao iznad njega. */
+  z-index: 1060;
 }
 .nav-more-sheet-item {
   display: flex; align-items: center; gap: 10px; padding: 11px 14px;
@@ -97,7 +108,9 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 .nav-more-sheet-item .icon { font-size: 1.15rem; }
 .nav-more-sheet-item.active { color: #0f766e; background: #f0fdfa; font-weight: 600; }
-.nav-more-backdrop { position: fixed; inset: 0; z-index: 150; }
+/* Iznad floating-ai-btn iz istog razloga - dok je meni otvoren, dodir na
+   asistent gumb treba samo zatvoriti meni, ne otvoriti chat. */
+.nav-more-backdrop { position: fixed; inset: 0; z-index: 1050; }
 
 @media (max-width: 767px) {
   .nav-more-item { display: none; }

@@ -28,7 +28,6 @@ export default function Navigation({ activeTab, onTabChange }) {
 
   return (
     <>
-      {moreOpen && <div className="nav-more-backdrop" onClick={() => setMoreOpen(false)} />}
       <nav className="bottom-nav">
         {PRIMARY.map(t => (
           <button
@@ -59,8 +58,16 @@ export default function Navigation({ activeTab, onTabChange }) {
           <span className="icon">⋯</span>
           <span>Više</span>
         </button>
+      </nav>
 
-        {moreOpen && (
+      {/* Backdrop i sheet moraju biti IZVAN <nav> — nav ima svoj z-index (100)
+          pa stvara vlastiti stacking context, u kojem bi bilo koji z-index
+          na djetetu bio zarobljen na toj razini bez obzira na broj. Kao
+          sestre na istoj razini kao nav, uspoređuju se s njim izravno pa
+          se stvarno probijaju iznad njega (i iznad plutajućeg AI gumba). */}
+      {moreOpen && (
+        <>
+          <div className="nav-more-backdrop" onClick={() => setMoreOpen(false)} />
           <div className="nav-more-sheet">
             {MORE.map(t => (
               <button
@@ -73,8 +80,8 @@ export default function Navigation({ activeTab, onTabChange }) {
               </button>
             ))}
           </div>
-        )}
-      </nav>
+        </>
+      )}
     </>
   );
 }
