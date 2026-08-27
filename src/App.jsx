@@ -39,8 +39,14 @@ function AppInner() {
     const interval = setInterval(doPull, 30000);
 
     // Pull čim se vratiš na tab/app (ključno za mobitel)
+    // Usput provjeri i novu verziju service workera — na PWA otvorenoj s home
+    // screena browser rijetko sam provjeri update jer to nije "svjeza" navigacija.
     function onVisibilityChange() {
-      if (document.visibilityState === 'visible') doPull();
+      if (document.visibilityState !== 'visible') return;
+      doPull();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(reg => reg && reg.update()).catch(() => {});
+      }
     }
     document.addEventListener('visibilitychange', onVisibilityChange);
 

@@ -81,6 +81,13 @@ function LTBreakdown({ t, lt, years }) {
       sub: lt.oneOffs.length + ' stavki',
     },
   ];
+  if (t.oneOffInvestDetails.length > 0) {
+    income.push({
+      name: 'Prinos od uloženih jednokratnih prihoda',
+      v: t.oneOffInvestInterestTotal,
+      sub: t.oneOffInvestDetails.map(d => d.name).join(', '),
+    });
+  }
 
   return (
     <div className="card">
@@ -219,6 +226,52 @@ function LTChart({ rows, goalTimeline }) {
   );
 }
 
+// ─── Prinos od uloženih jednokratnih prihoda ─────────────────────────────────
+function LTOneOffInvest({ details, rate }) {
+  if (details.length === 0) return null;
+  const totalAmount = details.reduce((s, d) => s + d.amount, 0);
+  const totalFV = details.reduce((s, d) => s + d.fv, 0);
+  const totalInterest = details.reduce((s, d) => s + d.interest, 0);
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        <h2>Ulaganje jednokratnih prihoda</h2>
+        <span className="muted">trezorski zapisi, {rate}%</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Stavka</th><th className="num">Ulog</th><th className="num">Dob</th>
+              <th className="num">Godina rasta</th><th className="num">Vrijednost na kraju</th><th className="num">Prinos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {details.map(d => (
+              <tr key={d.id}>
+                <td className="cat-name">{d.name}</td>
+                <td className="num">{fmtEUR(d.amount)}</td>
+                <td className="num">{d.age}</td>
+                <td className="num">{d.years}</td>
+                <td className="num">{fmtEUR(d.fv)}</td>
+                <td className="num pos">+{fmtEUR(d.interest)}</td>
+              </tr>
+            ))}
+            <tr className="lt-total-row">
+              <td><b>Ukupno</b></td>
+              <td className="num"><b>{fmtEUR(totalAmount)}</b></td>
+              <td></td><td></td>
+              <td className="num"><b>{fmtEUR(totalFV)}</b></td>
+              <td className="num pos"><b>+{fmtEUR(totalInterest)}</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Kad je koji cilj dostižan ──────────────────────────────────────────────
 function LTGoals({ goalTimeline, untimedCount }) {
   return (
@@ -231,10 +284,10 @@ function LTGoals({ goalTimeline, untimedCount }) {
         </div>
       )}
       <ul className="deviations">
-        {goalTimeline.map(g => (
+        {goalTimeline.map((g, i) => (
           <li key={g.id}>
             <div>
-              <div className="dev-name">{g.name}</div>
+              <div className="dev-name">{i + 1}. {g.name}</div>
               <div className="dev-detail">{fmtEUR(g.amount)} · kumulativno {fmtEUR(g.cumulative)}</div>
             </div>
             <div className={'dev-value ' + (g.reachedAge !== null ? 'pos' : 'neg')}>
@@ -243,6 +296,9 @@ function LTGoals({ goalTimeline, untimedCount }) {
           </li>
         ))}
       </ul>
+      <div className="lt-row-sub" style={{ marginTop: 10 }}>
+        Redoslijed = prioritet. Promijeni ga u postavkama ispod, u listi Ciljevi.
+      </div>
     </div>
   );
 }
@@ -250,43 +306,72 @@ function LTGoals({ goalTimeline, untimedCount }) {
 // ─── Uredive liste ──────────────────────────────────────────────────────────
 // Sve izmjene idu kroz setLT(updater) da rade nad svjezim stanjem — inace
 // brzo tabanje kroz polja izgubi ranije unose.
-function EditableList({ items, listKey, setLT, withAge, ageRange }) {
+function EditableList({ items, listKey, setLT, withAge, withInvest, reorderable, ageRange, investRate }) {
   const edit = fn => setLT(cur => ({ ...cur, [listKey]: fn(cur[listKey] || []) }));
   function upd(id, patch) { edit(list => list.map(it => (it.id === id ? { ...it, ...patch } : it))); }
   function del(id) { edit(list => list.filter(it => it.id !== id)); }
   function add() {
-    edit(list => [...list, { id: uidLT(), name: 'Nova stavka', amount: 0, ...(withAge ? { age: null } : {}) }]);
+    edit(list => [...list, { id: uidLT(), name: 'Nova stavka', amount: 0, ...(withAge ? { age: null } : {}), ...(withInvest ? { invest: false } : {}) }]);
+  }
+  function move(idx, dir) {
+    edit(list => {
+      const next = list.slice();
+      const j = idx + dir;
+      if (j < 0 || j >= next.length) return list;
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
   }
 
   return (
     <div className="lt-list-block">
-      {items.map(it => (
-        <div key={it.id} className="lt-list-row">
-          <input
-            className="lt-name-input"
-            defaultValue={it.name}
-            onBlur={e => { if (e.target.value !== it.name) upd(it.id, { name: e.target.value }); }}
-          />
-          <input
-            className="lt-amt-input"
-            type="number"
-            defaultValue={it.amount}
-            onBlur={e => upd(it.id, { amount: Number(e.target.value) || 0 })}
-          />
-          {withAge && (
+      {items.map((it, idx) => {
+        const hasAge = it.age !== null && it.age !== undefined && it.age !== '';
+        return (
+          <div key={it.id} className="lt-list-row">
+            {reorderable && (
+              <span className="lt-reorder">
+                <button className="lt-reorder-btn" disabled={idx === 0} onClick={() => move(idx, -1)}>▲</button>
+                <button className="lt-reorder-btn" disabled={idx === items.length - 1} onClick={() => move(idx, 1)}>▼</button>
+              </span>
+            )}
             <input
-              className="lt-age-input"
-              type="number"
-              placeholder="dob"
-              min={ageRange[0]}
-              max={ageRange[1]}
-              defaultValue={it.age ?? ''}
-              onBlur={e => upd(it.id, { age: e.target.value === '' ? null : Number(e.target.value) })}
+              className="lt-name-input"
+              defaultValue={it.name}
+              onBlur={e => { if (e.target.value !== it.name) upd(it.id, { name: e.target.value }); }}
             />
-          )}
-          <button className="btn ghost small lt-del" onClick={() => del(it.id)}>✕</button>
-        </div>
-      ))}
+            <input
+              className="lt-amt-input"
+              type="number"
+              defaultValue={it.amount}
+              onBlur={e => upd(it.id, { amount: Number(e.target.value) || 0 })}
+            />
+            {withAge && (
+              <input
+                className="lt-age-input"
+                type="number"
+                placeholder="dob"
+                min={ageRange[0]}
+                max={ageRange[1]}
+                defaultValue={it.age ?? ''}
+                onBlur={e => upd(it.id, { age: e.target.value === '' ? null : Number(e.target.value) })}
+              />
+            )}
+            {withInvest && (
+              <label className={'lt-invest-toggle' + (!hasAge ? ' disabled' : '')} title={hasAge ? 'Uloži u trezorske zapise (' + investRate + '%) od dobi prodaje do umirovljenja' : 'Upiši dob da bi mogao/mogla uložiti'}>
+                <input
+                  type="checkbox"
+                  disabled={!hasAge}
+                  checked={!!it.invest && hasAge}
+                  onChange={e => upd(it.id, { invest: e.target.checked })}
+                />
+                <span>Uloži</span>
+              </label>
+            )}
+            <button className="btn ghost small lt-del" onClick={() => del(it.id)}>✕</button>
+          </div>
+        );
+      })}
       {items.length === 0 && <div className="hero-empty">Nema stavki.</div>}
       <button className="btn ghost small" onClick={add}>+ Dodaj stavku</button>
     </div>
@@ -377,9 +462,11 @@ function LTSettings({ lt, setLT, baseYear, baseProjection }) {
 
       <div className="card">
         <div className="card-title"><h2>Jednokratni prihodi</h2></div>
-        <EditableList items={lt.oneOffs} listKey="oneOffs" setLT={setLT} withAge ageRange={ageRange} />
+        <EditableList items={lt.oneOffs} listKey="oneOffs" setLT={setLT} withAge withInvest ageRange={ageRange} investRate={lt.investment.rate} />
         <div className="lt-row-sub" style={{ marginTop: 8 }}>
           Treće polje je dob u kojoj očekuješ prihod. Bez nje se računa u zadnjoj godini.
+          "Uloži" znači: umjesto da taj novac samo uđe u kapital, uloži se u trezorske zapise
+          i raste po istoj stopi kao ulaganja gore, sve do umirovljenja.
         </div>
       </div>
 
@@ -390,7 +477,10 @@ function LTSettings({ lt, setLT, baseYear, baseProjection }) {
 
       <div className="card">
         <div className="card-title"><h2>Ciljevi</h2></div>
-        <EditableList items={lt.goals} listKey="goals" setLT={setLT} />
+        <EditableList items={lt.goals} listKey="goals" setLT={setLT} reorderable />
+        <div className="lt-row-sub" style={{ marginTop: 8 }}>
+          Redoslijed je prioritet ispunjavanja — strelicama promijeni koji cilj dolazi na red prvi.
+        </div>
       </div>
     </details>
   );
@@ -428,6 +518,7 @@ export default function MirovinaPage() {
     <section>
       <LTHero t={t} lt={lt} />
       <LTBreakdown t={t} lt={lt} years={proj.ages.length} />
+      <LTOneOffInvest details={t.oneOffInvestDetails} rate={lt.investment.rate} />
       <LTChart rows={proj.rows} goalTimeline={proj.goalTimeline} />
       <LTGoals goalTimeline={proj.goalTimeline} untimedCount={t.untimedCount} />
       <LTSettings lt={lt} setLT={setLT} baseYear={baseYear} baseProjection={baseProjection} />
