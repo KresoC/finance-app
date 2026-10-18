@@ -145,27 +145,36 @@ export function decSalaryNextJan(state) {
   return sum;
 }
 
+// Plan i stvarno se za SVE kategorije (i plaću) vode po mjesecu u kojem novac
+// stvarno ude/izade — listopadska plaća stoji u stupcu listopada, i u planu i
+// u stvarnom. Zato se oba čitaju iz istog mjeseca, bez pomaka.
+//
+// "Realan" prikaz: ciklus koji je zatvoren (m < billing mjesec, granica 15.)
+// računa samo ono što se stvarno dogodilo — propušteni plan je tada propušten,
+// ne "još će doći". Tekući i budući ciklusi: stvarno ako postoji, inače plan.
+function effIncomeCat(state, c, m, bm) {
+  const a = state.actual[c.id]?.[m] || 0;
+  if (m < bm) return a;
+  const p = state.plan[c.id]?.[m] || 0;
+  return a > 0 ? a : p;
+}
+
+function effExpenseCat(state, c, m, bm) {
+  const a = state.actual[c.id]?.[m] || 0;
+  if (m < bm) return a;
+  const p = state.plan[c.id]?.[m] || 0;
+  // Redovni u tekućem ciklusu: ne dajemo "zasluge" za manju potrošnju dok ciklus traje
+  if (m === bm && isBudgetCat(c)) return Math.max(a, p);
+  return a > 0 ? a : p;
+}
+
 export function effectiveIncomeMonth(state, m) {
-  let sum = 0;
-  state.categories.income.forEach(c => {
-    let a = 0;
-    if (isPlacaCat(c)) {
-      // Plaća za mjesec m stiže u m+1; za prosinac (m=11) stiže u prosincu (actual[11])
-      // Plaća za prosinački rad stiže 15.1. i dodaje se posebno u decSalaryNextJan.
-      const idx = m < 11 ? m + 1 : 11;
-      a = (state.actual[c.id]?.[idx]) || 0;
-    } else {
-      a = (state.actual[c.id] && state.actual[c.id][m]) || 0;
-    }
-    const p = (state.plan[c.id] && state.plan[c.id][m]) || 0;
-    sum += a > 0 ? a : p;
-  });
-  return sum;
+  const bm = activeBillingMonth(state);
+  return state.categories.income.reduce((s, c) => s + effIncomeCat(state, c, m, bm), 0);
 }
 
 export function effectiveExpenseMonth(state, m) {
-  const cm = currentMonthIdx(state);
-  const isCurrent = m === cm;
+  const bm = activeBillingMonth(state);
   let sum = 0;
   const seenG = new Set();
   state.categories.expense.forEach(c => {
@@ -178,76 +187,82 @@ export function effectiveExpenseMonth(state, m) {
         if (cc.group === g) actualSum += (state.actual[cc.id] && state.actual[cc.id][m]) || 0;
       });
       const planG = (state.groupPlan[g] && state.groupPlan[g][m]) || 0;
-      if (isCurrent) sum += Math.max(actualSum, planG);
+      if (m < bm) sum += actualSum;
+      else if (m === bm) sum += Math.max(actualSum, planG);
       else sum += actualSum > 0 ? actualSum : planG;
     } else {
-      const a = (state.actual[c.id] && state.actual[c.id][m]) || 0;
-      const p = (state.plan[c.id] && state.plan[c.id][m]) || 0;
-      if (isCurrent && isBudgetCat(c)) sum += Math.max(a, p);
-      else sum += a > 0 ? a : p;
+      sum += effExpenseCat(state, c, m, bm);
     }
   });
   return sum;
 }
 
-export function projectionYearEnd(state) {
+// Ukupni očekivani prihodi i rashodi za godinu (od početka praćenja do 31.12.,
+// plus plaća koja stiže 15.1.) — stvarno za zatvorene cikluse, plan za ostalo.
+function projectionParts(state) {
   const sm = startMonthIdx(state);
   const fromM = startIsThisYear(state) ? sm : 0;
-  const cm = currentMonthIdx(state);
-  let sum = state.initialBalance;
+  const bm = activeBillingMonth(state);
+  let income = 0, expense = 0;
 
-  // Korak 1: standardna monthly effective logika za sve kategorije
+  // Korak 1: mjesečna logika za sve kategorije
   for (let m = fromM; m < 12; m++) {
-    sum += effectiveIncomeMonth(state, m) - effectiveExpenseMonth(state, m);
+    income  += effectiveIncomeMonth(state, m);
+    expense += effectiveExpenseMonth(state, m);
   }
 
-  // Korak 2: ukloni doprinos fleksibilnih kategorija iz monthly zbroja
+  // Korak 2: izvuci fleksibilne kategorije iz mjesečnog zbroja (isti helperi
+  // kao korak 1, da se oduzme točno ono što je dodano)
   for (let m = fromM; m < 12; m++) {
-    // Ukloni fleksibilne prihode (što je effectiveIncomeMonth ubrojio)
     state.categories.income.forEach(c => {
-      if (!c.flexible) return;
-      let a;
-      if (isPlacaCat(c)) {
-        a = m < 11
-          ? (state.actual[c.id]?.[m + 1] || 0)
-          : (state.yearsData?.[state.year + 1]?.actual?.[c.id]?.[0] || 0);
-      } else {
-        a = state.actual[c.id]?.[m] || 0;
-      }
-      const p = state.plan[c.id]?.[m] || 0;
-      sum -= a > 0 ? a : p;
+      if (c.flexible) income -= effIncomeCat(state, c, m, bm);
     });
-
-    // Vrati fleksibilne troškove (što je effectiveExpenseMonth oduzeo)
-    // Preskačemo kategorije koje koriste groupPlan — tamo flexible nema smisla
+    // Kategorije u groupPlanu se ne izvlače — tamo flexible nema smisla
     state.categories.expense.forEach(c => {
       if (!c.flexible || (c.group && state.useGroupPlan?.[c.group])) return;
-      const a = state.actual[c.id]?.[m] || 0;
-      const p = state.plan[c.id]?.[m] || 0;
-      if (m === cm && isBudgetCat(c)) sum += Math.max(a, p);
-      else sum += a > 0 ? a : p;
+      expense -= effExpenseCat(state, c, m, bm);
     });
   }
 
-  // Korak 3: dodaj fleksibilne kategorije s godišnjom logikom
-  // Forecast = max(godišnji plan, godišnji actuals) → nema dvostrukog brojanja
+  // Korak 3: fleksibilne kategorije po godišnjoj logici
+  // max(godišnji plan, godišnji actuals) → nema dvostrukog brojanja
   state.categories.income.forEach(c => {
     if (!c.flexible) return;
     const annualPlan = (state.plan[c.id] || []).reduce((s, v) => s + v, 0);
     const annualActual = (state.actual[c.id] || []).reduce((s, v) => s + v, 0);
-    sum += Math.max(annualPlan, annualActual);
+    income += Math.max(annualPlan, annualActual);
   });
   state.categories.expense.forEach(c => {
     if (!c.flexible || (c.group && state.useGroupPlan?.[c.group])) return;
     const annualPlan = (state.plan[c.id] || []).reduce((s, v) => s + v, 0);
     const annualActual = (state.actual[c.id] || []).reduce((s, v) => s + v, 0);
-    sum -= Math.max(annualPlan, annualActual);
+    expense += Math.max(annualPlan, annualActual);
   });
 
   // Plaća za prosinački rad stiže 15.1. sljedeće godine — pripada ovoj godini
-  sum += decSalaryNextJan(state);
+  income += decSalaryNextJan(state);
 
-  return sum;
+  return { income, expense };
+}
+
+export function projectionYearEnd(state) {
+  const { income, expense } = projectionParts(state);
+  return state.initialBalance + income - expense;
+}
+
+// Što od procjene još NIJE ušlo u trenutno stanje. Po konstrukciji vrijedi:
+// trenutno stanje + preostali prihodi − preostali rashodi = procjena 31.12.
+export function forecastRemaining(state) {
+  const { income, expense } = projectionParts(state);
+  const sm = startMonthIdx(state);
+  const fromM = startIsThisYear(state) ? sm : 0;
+  const cm = currentMonthIdx(state);
+  let inSoFar = 0, outSoFar = 0;
+  for (let m = fromM; m <= cm; m++) {
+    inSoFar  += actualIncomeMonth(state, m);
+    outSoFar += actualExpenseMonth(state, m);
+  }
+  return { income: income - inSoFar, expense: expense - outSoFar };
 }
 
 export function plannedEndOfYear(state) {

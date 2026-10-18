@@ -4,7 +4,7 @@ import {
   fmtEUR, currentMonthIdx, activeBillingMonth, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
   plannedEndOfYear, plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth,
   actualExpenseMonth, plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
-  startMonthIdx, startIsThisYear, isPlacaCat, decSalaryNextJan, MONTHS_HR, MONTHS_LONG
+  startMonthIdx, startIsThisYear, isPlacaCat, decSalaryNextJan, forecastRemaining, MONTHS_HR, MONTHS_LONG
 } from '../utils/finance.js';
 
 function HeroCard({ state }) {
@@ -41,30 +41,12 @@ function activeInvReturns(state) {
 }
 
 function StatGrid({ state }) {
-  const cm = currentMonthIdx(state);
   const cb = currentBalance(state);
   const invReturns = activeInvReturns(state);
   const proj = chainedProjectionYearEnd(state);
   const goal = plannedEndOfYear(state);
   const dev = proj - goal;
-
-  function sumRemaining(type) {
-    let s = 0;
-    const seen = new Set();
-    state.categories[type].forEach(c => {
-      const g = c.group;
-      if (g && state.useGroupPlan && state.useGroupPlan[g]) {
-        if (seen.has(g)) return;
-        seen.add(g);
-        for (let m = cm; m < 12; m++) s += (state.groupPlan[g] && state.groupPlan[g][m]) || 0;
-      } else {
-        for (let m = cm; m < 12; m++) s += (state.plan[c.id] && state.plan[c.id][m]) || 0;
-      }
-    });
-    // Za prihode: dodaj plaću za prosinački rad (stiže 15.1. sljedeće godine)
-    if (type === 'income') s += decSalaryNextJan(state);
-    return s;
-  }
+  const remaining = forecastRemaining(state);
 
   return (
     <>
@@ -85,12 +67,14 @@ function StatGrid({ state }) {
       </div>
       <div className="hero-grid two">
         <div className="card stat-card">
-          <div className="stat-label">Preostali planirani prihodi</div>
-          <div className="stat-value pos">{fmtEUR(sumRemaining('income'))}</div>
+          <div className="stat-label">Preostali prihodi</div>
+          <div className="stat-value pos">{fmtEUR(remaining.income)}</div>
+          <div className="stat-sub">još nije u trenutnom stanju, uklj. plaću 15.1.</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-label">Preostali planirani rashodi</div>
-          <div className="stat-value neg">{fmtEUR(sumRemaining('expense'))}</div>
+          <div className="stat-label">Preostali rashodi</div>
+          <div className="stat-value neg">{fmtEUR(remaining.expense)}</div>
+          <div className="stat-sub">još nije u trenutnom stanju</div>
         </div>
       </div>
     </>
