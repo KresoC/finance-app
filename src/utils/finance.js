@@ -173,23 +173,29 @@ export function effectiveIncomeMonth(state, m) {
   return state.categories.income.reduce((s, c) => s + effIncomeCat(state, c, m, bm), 0);
 }
 
+function groupActual(state, g, m) {
+  return state.categories.expense.reduce((s, cc) => s + (cc.group === g ? (state.actual[cc.id]?.[m] || 0) : 0), 0);
+}
+
+function effExpenseGroup(state, g, m, bm) {
+  const a = groupActual(state, g, m);
+  if (m < bm) return a;
+  const p = state.groupPlan?.[g]?.[m] || 0;
+  if (m === bm) return Math.max(a, p);
+  return a > 0 ? a : p;
+}
+
+const usesGroupPlan = (state, c) => !!(c.group && state.useGroupPlan?.[c.group]);
+
 export function effectiveExpenseMonth(state, m) {
   const bm = activeBillingMonth(state);
   let sum = 0;
   const seenG = new Set();
   state.categories.expense.forEach(c => {
-    const g = c.group;
-    if (g && state.useGroupPlan && state.useGroupPlan[g]) {
-      if (seenG.has(g)) return;
-      seenG.add(g);
-      let actualSum = 0;
-      state.categories.expense.forEach(cc => {
-        if (cc.group === g) actualSum += (state.actual[cc.id] && state.actual[cc.id][m]) || 0;
-      });
-      const planG = (state.groupPlan[g] && state.groupPlan[g][m]) || 0;
-      if (m < bm) sum += actualSum;
-      else if (m === bm) sum += Math.max(actualSum, planG);
-      else sum += actualSum > 0 ? actualSum : planG;
+    if (usesGroupPlan(state, c)) {
+      if (seenG.has(c.group)) return;
+      seenG.add(c.group);
+      sum += effExpenseGroup(state, c.group, m, bm);
     } else {
       sum += effExpenseCat(state, c, m, bm);
     }
@@ -263,6 +269,72 @@ export function forecastRemaining(state) {
     outSoFar += actualExpenseMonth(state, m);
   }
   return { income: income - inSoFar, expense: expense - outSoFar };
+}
+
+// Raščlamba forecastRemaining po stavkama; zbroj stavki = forecastRemaining.
+// Stavka: { name, month (0-11) ili null, when (tekst za godišnje/15.1.), amount, note }
+export function forecastRemainingDetail(state) {
+  const sm = startMonthIdx(state);
+  const fromM = startIsThisYear(state) ? sm : 0;
+  const cm = currentMonthIdx(state);
+  const bm = activeBillingMonth(state);
+  const startM = Math.max(fromM, bm);
+  const inSoFar = (c, m) => (m <= cm ? (state.actual[c.id]?.[m] || 0) : 0);
+  const actualToDate = c => {
+    let s = 0;
+    for (let m = fromM; m <= cm; m++) s += state.actual[c.id]?.[m] || 0;
+    return s;
+  };
+  const sumArr = arr => (arr || []).reduce((s, v) => s + (v || 0), 0);
+  const keep = x => Math.abs(x) >= 0.5;
+
+  // Fleksibilna: procjena je max(godišnji plan, godišnje primljeno), umanjeno za
+  // ono što je već u stanju.
+  function flexLine(c, verbIn) {
+    const annualPlan = sumArr(state.plan[c.id]);
+    const annualActual = sumArr(state.actual[c.id]);
+    const got = actualToDate(c);
+    return {
+      name: c.name, month: null, when: 'godišnje (fleksibilno)',
+      amount: Math.max(annualPlan, annualActual) - got,
+      note: 'godišnji plan ' + fmtEUR(annualPlan) + ', ' + verbIn + ' ' + fmtEUR(got),
+    };
+  }
+
+  const income = [];
+  state.categories.income.forEach(c => {
+    if (c.flexible) { const l = flexLine(c, 'primljeno'); if (keep(l.amount)) income.push(l); return; }
+    for (let m = startM; m < 12; m++) {
+      const amt = effIncomeCat(state, c, m, bm) - inSoFar(c, m);
+      if (keep(amt)) income.push({ name: c.name, month: m, amount: amt });
+    }
+  });
+  const dec = decSalaryNextJan(state);
+  if (keep(dec)) income.push({ name: 'Plaća (za prosinac)', month: null, when: '15.1.' + (state.year + 1), amount: dec });
+
+  const expense = [];
+  const seenG = new Set();
+  state.categories.expense.forEach(c => {
+    if (usesGroupPlan(state, c)) {
+      if (seenG.has(c.group)) return;
+      seenG.add(c.group);
+      for (let m = startM; m < 12; m++) {
+        const amt = effExpenseGroup(state, c.group, m, bm) - (m <= cm ? groupActual(state, c.group, m) : 0);
+        if (keep(amt)) expense.push({ name: c.group + ' (grupa)', month: m, amount: amt });
+      }
+      return;
+    }
+    if (c.flexible) { const l = flexLine(c, 'potrošeno'); if (keep(l.amount)) expense.push(l); return; }
+    for (let m = startM; m < 12; m++) {
+      const amt = effExpenseCat(state, c, m, bm) - inSoFar(c, m);
+      if (keep(amt)) expense.push({ name: c.name, month: m, amount: amt });
+    }
+  });
+
+  const order = l => (l.month === null ? (l.when.startsWith('15.1') ? 13 : -1) : l.month);
+  income.sort((a, b) => order(a) - order(b));
+  expense.sort((a, b) => order(a) - order(b));
+  return { income, expense };
 }
 
 export function plannedEndOfYear(state) {

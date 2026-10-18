@@ -4,7 +4,7 @@ import {
   fmtEUR, currentMonthIdx, activeBillingMonth, currentBalance, projectionYearEnd, chainedProjectionYearEnd,
   plannedEndOfYear, plannedIncomeMonth, plannedExpenseMonth, actualIncomeMonth,
   actualExpenseMonth, plannedBalanceEndMonth, actualBalanceEndMonth, dayOfMonthFraction,
-  startMonthIdx, startIsThisYear, isPlacaCat, decSalaryNextJan, forecastRemaining, MONTHS_HR, MONTHS_LONG
+  startMonthIdx, startIsThisYear, isPlacaCat, decSalaryNextJan, forecastRemaining, forecastRemainingDetail, MONTHS_HR, MONTHS_LONG
 } from '../utils/finance.js';
 
 function HeroCard({ state }) {
@@ -40,6 +40,27 @@ function activeInvReturns(state) {
     .reduce((s, i) => s + (i.faceValue ? i.faceValue - i.amount : i.amount * (i.rate / 100) * (i.days / 365)), 0);
 }
 
+function RemainingList({ lines }) {
+  if (lines.length === 0) return null;
+  return (
+    <details className="rem-details">
+      <summary>Što ulazi ({lines.length})</summary>
+      <ul className="rem-list">
+        {lines.map((l, i) => (
+          <li key={i}>
+            <span className="rem-when">{l.month !== null ? MONTHS_HR[l.month] : l.when}</span>
+            <span className="rem-name">
+              {l.name}
+              {l.note && <span className="rem-note">{l.note}</span>}
+            </span>
+            <span className="rem-amt">{fmtEUR(l.amount)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function StatGrid({ state }) {
   const cb = currentBalance(state);
   const invReturns = activeInvReturns(state);
@@ -47,6 +68,7 @@ function StatGrid({ state }) {
   const goal = plannedEndOfYear(state);
   const dev = proj - goal;
   const remaining = forecastRemaining(state);
+  const detail = forecastRemainingDetail(state);
 
   return (
     <>
@@ -70,11 +92,13 @@ function StatGrid({ state }) {
           <div className="stat-label">Preostali prihodi</div>
           <div className="stat-value pos">{fmtEUR(remaining.income)}</div>
           <div className="stat-sub">još nije u trenutnom stanju, uklj. plaću 15.1.</div>
+          <RemainingList lines={detail.income} />
         </div>
         <div className="card stat-card">
           <div className="stat-label">Preostali rashodi</div>
           <div className="stat-value neg">{fmtEUR(remaining.expense)}</div>
           <div className="stat-sub">još nije u trenutnom stanju</div>
+          <RemainingList lines={detail.expense} />
         </div>
       </div>
     </>

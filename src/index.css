@@ -1565,3 +1565,17 @@ td.inactive-cell.col-current { background: #f0f9ff; }
   .lt-list-row { flex-wrap: wrap; row-gap: 6px; }
   .lt-name-input { flex: 1 1 100%; order: -1; }
 }
+
+/* Raščlamba "Preostali prihodi/rashodi" na Pregledu */
+.rem-details { margin-top: 10px; text-align: left; }
+.rem-details summary { cursor: pointer; font-size: 0.78rem; color: #0f766e; font-weight: 600; list-style: none; user-select: none; }
+.rem-details summary::-webkit-details-marker { display: none; }
+.rem-details summary::before { content: '▸ '; }
+.rem-details[open] summary::before { content: '▾ '; }
+.rem-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rem-list li { display: flex; align-items: baseline; gap: 8px; font-size: 0.82rem; color: #334155; }
+.rem-when { flex: 0 0 auto; min-width: 34px; color: #94a3b8; font-size: 0.74rem; }
+.rem-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.rem-note { font-size: 0.7rem; color: #b45309; }
+.rem-amt { flex: 0 0 auto; font-weight: 600; white-space: nowrap; }
+.stat-card .stat-sub { font-size: 0.74rem; color: #64748b; margin-top: 4px; line-height: 1.35; }
